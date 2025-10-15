@@ -1,0 +1,211 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User Management
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  role         UserRole @default(CLIENT)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("users")
+}
+
+enum UserRole {
+  CLIENT
+  ADMIN
+}
+
+// Geographic Data
+model Subzone {
+  id              String   @id @default(cuid())
+  subzoneId       String   @unique
+  name            String
+  region          String
+  geometryPolygon Json     // GeoJSON polygon
+  centroid        Json     // GeoJSON point
+  radii           Float[]  // Distance radii for analysis
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  demand          Demand?
+  supply          Supply?
+  accessibility   Accessibility?
+  scores          HawkerOpportunityScore[]
+
+  @@map("subzones")
+}
+
+// Population Data
+model PopulationPoint {
+  id           String @id @default(cuid())
+  subzoneId    String
+  location     Json   // GeoJSON point
+  residentCount Int
+  age0_14      Int
+  age15_64     Int
+  age65p       Int
+  createdAt    DateTime @default(now())
+
+  @@map("population_points")
+}
+
+// Hawker Centre Data
+model HawkerCentre {
+  id       String @id @default(cuid())
+  centreId String @unique
+  name     String
+  location Json   // GeoJSON point
+  capacity Int
+  status   String
+  createdAt DateTime @default(now())
+
+  @@map("hawker_centres")
+}
+
+// MRT Station Data
+model MRTStation {
+  id        String @id @default(cuid())
+  stationId String @unique
+  name      String
+  location  Json   // GeoJSON point
+  lineCount Int
+  createdAt DateTime @default(now())
+
+  @@map("mrt_stations")
+}
+
+// Bus Stop Data
+model BusStop {
+  id        String  @id @default(cuid())
+  stopCode  String  @unique
+  roadName  String
+  location  Json    // GeoJSON point
+  freqWeight Float
+  createdAt DateTime @default(now())
+
+  @@map("bus_stops")
+}
+
+// Score Components
+model Demand {
+  id        String @id @default(cuid())
+  subzoneId String @unique
+  rawKDE    Float
+  zScore    Float
+  lambdaD   Float  // Kernel bandwidth
+  createdAt DateTime @default(now())
+
+  subzone   Subzone @relation(fields: [subzoneId], references: [subzoneId], onDelete: Cascade)
+
+  @@map("demand")
+}
+
+model Supply {
+  id              String @id @default(cuid())
+  subzoneId       String @unique
+  rawKDECompeting Float
+  zScore          Float
+  lambdaS         Float  // Kernel bandwidth
+  createdAt       DateTime @default(now())
+
+  subzone         Subzone @relation(fields: [subzoneId], references: [subzoneId], onDelete: Cascade)
+
+  @@map("supply")
+}
+
+model Accessibility {
+  id        String @id @default(cuid())
+  subzoneId String @unique
+  rawMRTKDE Float
+  rawBusKDE Float
+  betaMRT   Float
+  betaBUS   Float
+  lambdaM   Float  // MRT kernel bandwidth
+  lambdaB   Float  // Bus kernel bandwidth
+  zScore    Float
+  createdAt DateTime @default(now())
+
+  subzone   Subzone @relation(fields: [subzoneId], references: [subzoneId], onDelete: Cascade)
+
+  @@map("accessibility")
+}
+
+// Final Scores
+model HawkerOpportunityScore {
+  id         String @id @default(cuid())
+  subzoneId  String
+  H          Float  // Final Hawker Opportunity Score
+  zDemand    Float
+  zSupply    Float
+  zAccess    Float
+  wD         Float  // Demand weight
+  wS         Float  // Supply weight
+  wA         Float  // Accessibility weight
+  percentile Float
+  snapshotId String
+  createdAt  DateTime @default(now())
+
+  subzone    Subzone @relation(fields: [subzoneId], references: [subzoneId], onDelete: Cascade)
+  snapshot   Snapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+
+  @@map("hawker_opportunity_scores")
+}
+
+// Snapshots and Configuration
+model Snapshot {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  notes     String?
+
+  // Relations
+  scores    HawkerOpportunityScore[]
+  datasets  DatasetVersion[]
+  config    KernelConfig?
+
+  @@map("snapshots")
+}
+
+model DatasetVersion {
+  id           String   @id @default(cuid())
+  snapshotId   String
+  datasetName  String
+  sourceURL    String
+  lastUpdated  DateTime
+  retrievedAt  DateTime @default(now())
+  schemaHash   String
+
+  snapshot     Snapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+
+  @@map("dataset_versions")
+}
+
+model KernelConfig {
+  id         String @id @default(cuid())
+  kernelType String @default("Gaussian")
+  lambdaD    Float
+  lambdaS    Float
+  lambdaM    Float
+  lambdaB    Float
+  betaMRT    Float
+  betaBUS    Float
+  notes      String?
+  createdAt  DateTime @default(now())
+
+  snapshot   Snapshot? @relation(fields: [id], references: [id])
+
+  @@map("kernel_configs")
+}
