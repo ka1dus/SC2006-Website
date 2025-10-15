@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { decode } from 'jwt-decode';
+import decode from 'jwt-decode';
 
 interface User {
   id: string;

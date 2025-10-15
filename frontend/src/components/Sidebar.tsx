@@ -10,35 +10,88 @@ export default function Sidebar() {
   const { selectedSubzone, comparisonSubzones } = useMap();
 
   return (
-    <aside className="w-80 bg-white shadow-sm border-r border-gray-200 h-screen overflow-y-auto">
-      <div className="p-4 space-y-4">
+    <aside className="w-[420px] bg-dark-900/80 backdrop-blur-2xl shadow-2xl border-r border-neon-cyan/20 h-screen overflow-y-auto custom-scrollbar">
+      {/* Sidebar Header */}
+      <div className="relative p-8 border-b border-dark-700/50">
+        {/* Background glow */}
+        <div className="absolute inset-0 bg-gradient-to-r from-neon-cyan/5 to-neon-blue/5 opacity-50"></div>
+        
+        <div className="relative space-y-3">
+          <div className="flex items-center space-x-3">
+            <div className="w-8 h-8 bg-gradient-to-br from-neon-cyan to-neon-blue rounded-lg flex items-center justify-center shadow-glow">
+              <span className="text-lg">📊</span>
+            </div>
+            <h2 className="text-2xl font-bold bg-gradient-to-r from-neon-cyan via-neon-blue to-neon-purple bg-clip-text text-transparent">
+              Analytics Dashboard
+            </h2>
+          </div>
+          
+          <div className="flex items-center space-x-2">
+            <div className="w-2 h-2 bg-neon-green rounded-full animate-pulse"></div>
+            <p className="text-sm text-dark-300 font-mono tracking-wider uppercase">
+              Real-time Hawker Opportunity Analysis
+            </p>
+          </div>
+          
+          {/* Status indicator */}
+          <div className="flex items-center space-x-2 text-xs text-dark-400">
+            <div className="w-1.5 h-1.5 bg-neon-green rounded-full animate-pulse"></div>
+            <span>System Online</span>
+            <span className="text-neon-cyan">•</span>
+            <span>Data Synced</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="p-8 space-y-8">
         {/* Filter Panel */}
-        <FilterPanel />
+        <div className="relative group">
+          <div className="absolute -inset-1 bg-gradient-to-r from-neon-cyan/10 to-neon-blue/10 rounded-2xl blur opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+          <div className="relative bg-dark-800/50 backdrop-blur-sm rounded-2xl border border-dark-700/50 shadow-xl hover:border-neon-cyan/30 transition-all duration-300">
+            <FilterPanel />
+          </div>
+        </div>
         
         {/* Comparison Tray */}
         {comparisonSubzones.length > 0 && (
-          <ComparisonTray />
+          <div className="relative group">
+            <div className="absolute -inset-1 bg-gradient-to-r from-neon-purple/10 to-neon-pink/10 rounded-2xl blur opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+            <div className="relative bg-dark-800/50 backdrop-blur-sm rounded-2xl border border-dark-700/50 shadow-xl hover:border-neon-purple/30 transition-all duration-300">
+              <ComparisonTray />
+            </div>
+          </div>
         )}
         
         {/* Subzone Details */}
-        {selectedSubzone && (
-          <SubzoneDetails subzone={selectedSubzone} />
-        )}
-        
-        {/* Empty State */}
-        {!selectedSubzone && comparisonSubzones.length === 0 && (
-          <div className="text-center py-8">
-            <div className="text-gray-400 mb-2">
-              <svg className="mx-auto h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-              </svg>
+        {selectedSubzone ? (
+          <div className="relative group">
+            <div className="absolute -inset-1 bg-gradient-to-r from-neon-green/10 to-neon-cyan/10 rounded-2xl blur opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+            <div className="relative bg-dark-800/50 backdrop-blur-sm rounded-2xl border border-dark-700/50 shadow-xl hover:border-neon-green/30 transition-all duration-300">
+              <SubzoneDetails subzone={selectedSubzone} />
             </div>
-            <h3 className="text-sm font-medium text-gray-900 mb-1">
-              No subzone selected
+          </div>
+        ) : (
+          <div className="text-center py-16">
+            <div className="relative mx-auto w-24 h-24 mb-6">
+              <div className="absolute inset-0 bg-gradient-to-br from-neon-cyan/20 to-neon-blue/20 rounded-3xl blur-lg animate-pulse"></div>
+              <div className="relative w-24 h-24 bg-gradient-to-br from-neon-cyan/30 to-neon-blue/30 rounded-3xl flex items-center justify-center border border-neon-cyan/30 shadow-glow">
+                <span className="text-4xl animate-float">🎯</span>
+              </div>
+            </div>
+            
+            <h3 className="text-xl font-bold text-dark-100 mb-3">
+              No Subzone Selected
             </h3>
-            <p className="text-sm text-gray-500">
-              Click on a subzone on the map to view details
+            <p className="text-sm text-dark-400 leading-relaxed max-w-xs mx-auto">
+              Click on a subzone on the map to view detailed analytics and opportunity scores
             </p>
+            
+            {/* Animated dots */}
+            <div className="flex justify-center space-x-1 mt-6">
+              <div className="w-2 h-2 bg-neon-cyan rounded-full animate-bounce"></div>
+              <div className="w-2 h-2 bg-neon-blue rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+              <div className="w-2 h-2 bg-neon-purple rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+            </div>
           </div>
         )}
       </div>

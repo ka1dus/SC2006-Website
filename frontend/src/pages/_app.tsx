@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from 'react-query';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { MapProvider } from '@/contexts/MapContext';
 import { Toaster } from 'react-hot-toast';
+import ErrorBoundary from '@/components/ErrorBoundary';
 import '@/styles/globals.css';
 
 const queryClient = new QueryClient({
@@ -16,38 +17,44 @@ const queryClient = new QueryClient({
 
 export default function App({ Component, pageProps }: AppProps) {
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <MapProvider>
-          <div className="min-h-screen bg-gray-50">
-            <Component {...pageProps} />
-            <Toaster
-              position="top-right"
-              toastOptions={{
-                duration: 4000,
-                style: {
-                  background: '#363636',
-                  color: '#fff',
-                },
-                success: {
-                  duration: 3000,
-                  iconTheme: {
-                    primary: '#10b981',
-                    secondary: '#fff',
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <MapProvider>
+            <div className="min-h-screen bg-gradient-to-br from-dark-950 via-dark-900 to-dark-800">
+              <Component {...pageProps} />
+              <Toaster
+                position="top-right"
+                toastOptions={{
+                  duration: 4000,
+                  style: {
+                    background: 'rgba(15, 23, 42, 0.9)',
+                    color: '#e2e8f0',
+                    border: '1px solid rgba(6, 182, 212, 0.3)',
+                    backdropFilter: 'blur(12px)',
+                    borderRadius: '12px',
+                    boxShadow: '0 0 20px rgba(6, 182, 212, 0.2)',
                   },
-                },
-                error: {
-                  duration: 5000,
-                  iconTheme: {
-                    primary: '#ef4444',
-                    secondary: '#fff',
+                  success: {
+                    duration: 3000,
+                    iconTheme: {
+                      primary: '#06b6d4',
+                      secondary: '#fff',
+                    },
                   },
-                },
-              }}
-            />
-          </div>
-        </MapProvider>
-      </AuthProvider>
-    </QueryClientProvider>
+                  error: {
+                    duration: 5000,
+                    iconTheme: {
+                      primary: '#ef4444',
+                      secondary: '#fff',
+                    },
+                  },
+                }}
+              />
+            </div>
+          </MapProvider>
+        </AuthProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
