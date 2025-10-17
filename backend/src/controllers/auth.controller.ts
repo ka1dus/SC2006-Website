@@ -132,12 +132,14 @@ export async function getProfile(req: Request, res: Response) {
       success: true,
       data: { user }
     });
+    return;
 
   } catch (error: any) {
     res.status(500).json({
       success: false,
       error: error.message || 'Failed to get profile'
     });
+    return;
   }
 }
 

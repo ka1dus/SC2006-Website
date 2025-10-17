@@ -55,12 +55,14 @@ export async function getSubzoneByIdHandler(req: Request, res: Response) {
       success: true,
       data: { subzone }
     });
+    return;
 
   } catch (error: any) {
     res.status(500).json({
       success: false,
       error: error.message || 'Failed to fetch subzone'
     });
+    return;
   }
 }
 
@@ -82,12 +84,14 @@ export async function getSubzoneDetailsHandler(req: Request, res: Response) {
       success: true,
       data: { details }
     });
+    return;
 
   } catch (error: any) {
     res.status(500).json({
       success: false,
       error: error.message || 'Failed to fetch subzone details'
     });
+    return;
   }
 }
 
@@ -109,12 +113,14 @@ export async function searchSubzonesHandler(req: Request, res: Response) {
       success: true,
       data: { subzones }
     });
+    return;
 
   } catch (error: any) {
     res.status(500).json({
       success: false,
       error: error.message || 'Failed to search subzones'
     });
+    return;
   }
 }
 
@@ -147,12 +153,14 @@ export async function getLatestScoresHandler(req: Request, res: Response) {
       success: true,
       data: { scores }
     });
+    return;
 
   } catch (error: any) {
     res.status(500).json({
       success: false,
       error: error.message || 'Failed to fetch scores'
     });
+    return;
   }
 }
 
@@ -182,11 +190,13 @@ export async function getScoresByPercentileHandler(req: Request, res: Response) 
       success: true,
       data: { scores }
     });
+    return;
 
   } catch (error: any) {
     res.status(500).json({
       success: false,
       error: error.message || 'Failed to fetch scores by percentile'
     });
+    return;
   }
 }

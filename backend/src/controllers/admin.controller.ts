@@ -14,10 +14,11 @@ export async function refreshDatasets(req: Request, res: Response) {
     const user = (req as any).user;
     
     if (!isAdmin(user)) {
-      return res.status(403).json({
+      res.status(403).json({
         success: false,
         error: 'Admin access required'
       });
+      return;
     }
 
     const validatedData = refreshDatasetsSchema.parse(req.body);
@@ -97,6 +98,7 @@ export async function refreshDatasets(req: Request, res: Response) {
         datasetsRefreshed: datasets
       }
     });
+    return;
 
   } catch (error: any) {
     console.error('Dataset refresh error:', error);
@@ -104,6 +106,7 @@ export async function refreshDatasets(req: Request, res: Response) {
       success: false,
       error: error.message || 'Dataset refresh failed'
     });
+    return;
   }
 }
 
@@ -134,12 +137,14 @@ export async function getAllSnapshots(req: Request, res: Response) {
       success: true,
       data: { snapshots }
     });
+    return;
 
   } catch (error: any) {
     res.status(500).json({
       success: false,
       error: error.message || 'Failed to fetch snapshots'
     });
+    return;
   }
 }
 
@@ -187,12 +192,14 @@ export async function getSnapshotById(req: Request, res: Response) {
       success: true,
       data: { snapshot }
     });
+    return;
 
   } catch (error: any) {
     res.status(500).json({
       success: false,
       error: error.message || 'Failed to fetch snapshot'
     });
+    return;
   }
 }
 
@@ -236,12 +243,14 @@ export async function createSnapshot(req: Request, res: Response) {
       message: 'Snapshot created successfully',
       data: { snapshot }
     });
+    return;
 
   } catch (error: any) {
     res.status(500).json({
       success: false,
       error: error.message || 'Failed to create snapshot'
     });
+    return;
   }
 }
 
@@ -268,12 +277,14 @@ export async function getKernelConfigs(req: Request, res: Response) {
       success: true,
       data: { configs }
     });
+    return;
 
   } catch (error: any) {
     res.status(500).json({
       success: false,
       error: error.message || 'Failed to fetch kernel configurations'
     });
+    return;
   }
 }
 
@@ -303,12 +314,14 @@ export async function createKernelConfig(req: Request, res: Response) {
       message: 'Kernel configuration created successfully',
       data: { config }
     });
+    return;
 
   } catch (error: any) {
     res.status(500).json({
       success: false,
       error: error.message || 'Failed to create kernel configuration'
     });
+    return;
   }
 }
 
@@ -358,11 +371,13 @@ export async function getSystemStats(req: Request, res: Response) {
         latestSnapshot
       }
     });
+    return;
 
   } catch (error: any) {
     res.status(500).json({
       success: false,
       error: error.message || 'Failed to fetch system statistics'
     });
+    return;
   }
 }

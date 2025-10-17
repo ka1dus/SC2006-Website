@@ -51,6 +51,7 @@ export async function exportSubzoneDetails(req: Request, res: Response) {
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', `attachment; filename="${details.name}-details.pdf"`);
       res.send(pdfContent);
+      return;
       
     } else if (validatedData.format === 'png') {
       // Generate PNG (simplified - in production, use a proper image generation library)
@@ -59,12 +60,14 @@ export async function exportSubzoneDetails(req: Request, res: Response) {
       res.setHeader('Content-Type', 'image/png');
       res.setHeader('Content-Disposition', `attachment; filename="${details.name}-details.png"`);
       res.send(pngContent);
+      return;
       
     } else {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: 'Unsupported export format'
       });
+      return;
     }
 
   } catch (error: any) {
@@ -72,6 +75,7 @@ export async function exportSubzoneDetails(req: Request, res: Response) {
       success: false,
       error: error.message || 'Export failed'
     });
+    return;
   }
 }
 
@@ -128,12 +132,14 @@ export async function exportComparison(req: Request, res: Response) {
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', `attachment; filename="comparison-${details1.name}-${details2.name}.pdf"`);
       res.send(pdfContent);
+      return;
       
     } else {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: 'Unsupported export format'
       });
+      return;
     }
 
   } catch (error: any) {
@@ -141,6 +147,7 @@ export async function exportComparison(req: Request, res: Response) {
       success: false,
       error: error.message || 'Export failed'
     });
+    return;
   }
 }
 
@@ -166,13 +173,13 @@ Age 65+: ${data.demographics.ageGroups.age65p}
 ` : 'Demographics not available'}
 
 HAWKER CENTRES
-${data.hawkerCentres?.map(hc => `- ${hc.name} (${hc.distance}m, capacity: ${hc.capacity})`).join('\n') || 'No hawker centres found'}
+${data.hawkerCentres?.map((hc: any) => `- ${hc.name} (${hc.distance}m, capacity: ${hc.capacity})`).join('\n') || 'No hawker centres found'}
 
 MRT STATIONS
-${data.mrtStations?.map(station => `- ${station.name} (${station.distance}m, ${station.lineCount} lines)`).join('\n') || 'No MRT stations found'}
+${data.mrtStations?.map((station: any) => `- ${station.name} (${station.distance}m, ${station.lineCount} lines)`).join('\n') || 'No MRT stations found'}
 
 BUS STOPS
-${data.busStops?.map(stop => `- ${stop.code} (${stop.distance}m)`).join('\n') || 'No bus stops found'}
+${data.busStops?.map((stop: any) => `- ${stop.code} (${stop.distance}m)`).join('\n') || 'No bus stops found'}
 
 SCORE ANALYSIS
 ${data.score ? `

@@ -49,6 +49,7 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
     // Attach user to request
     (req as any).user = fullUser;
     next();
+    return;
 
   } catch (error) {
     console.error('Auth middleware error:', error);
@@ -56,6 +57,7 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
       success: false,
       error: 'Authentication failed'
     });
+    return;
   }
 }
 
@@ -72,13 +74,15 @@ export function adminMiddleware(req: Request, res: Response, next: NextFunction)
     }
 
     if (user.role !== 'ADMIN') {
-      return res.status(403).json({
+      res.status(403).json({
         success: false,
         error: 'Admin access required'
       });
+      return;
     }
 
     next();
+    return;
 
   } catch (error) {
     console.error('Admin middleware error:', error);
@@ -86,6 +90,7 @@ export function adminMiddleware(req: Request, res: Response, next: NextFunction)
       success: false,
       error: 'Authorization failed'
     });
+    return;
   }
 }
 

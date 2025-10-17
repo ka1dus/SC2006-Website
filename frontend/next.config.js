@@ -9,6 +9,9 @@ const nextConfig = {
   images: {
     domains: ['localhost'],
   },
+  experimental: {
+    esmExternals: false,
+  },
   async rewrites() {
     return [
       {

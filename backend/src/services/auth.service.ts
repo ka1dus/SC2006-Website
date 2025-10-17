@@ -3,8 +3,8 @@ import jwt from 'jsonwebtoken';
 import { prisma } from '../database/client';
 import { UserRole } from '@prisma/client';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret';
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '30m';
+const JWT_SECRET: string = process.env.JWT_SECRET || 'fallback-secret';
+const JWT_EXPIRES_IN: string = process.env.JWT_EXPIRES_IN || '30m';
 
 export interface AuthUser {
   id: string;
@@ -31,15 +31,13 @@ export async function verifyPassword(password: string, hashedPassword: string): 
 
 // Generate JWT token
 export function generateToken(user: AuthUser): string {
-  return jwt.sign(
-    { 
-      id: user.id, 
-      email: user.email, 
-      role: user.role 
-    },
-    JWT_SECRET,
-    { expiresIn: JWT_EXPIRES_IN }
-  );
+  const payload = { 
+    id: user.id, 
+    email: user.email, 
+    role: user.role 
+  };
+  const options = { expiresIn: JWT_EXPIRES_IN };
+  return jwt.sign(payload, JWT_SECRET, options as any);
 }
 
 // Verify JWT token

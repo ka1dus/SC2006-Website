@@ -48,6 +48,7 @@ export function errorHandler(error: Error, req: Request, res: Response, next: Ne
       ? 'Internal server error' 
       : error.message
   });
+  return;
 }
 
 // 404 handler
@@ -57,6 +58,7 @@ export function notFoundHandler(req: Request, res: Response) {
     error: 'Route not found',
     path: req.originalUrl
   });
+  return;
 }
 
 // Rate limiting middleware (simplified)
