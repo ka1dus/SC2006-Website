@@ -3,11 +3,14 @@
  * Custom styles for Mapbox map and related components
  */
 
-/* Map container */
+/* Map container - MUST have explicit height or map is blank */
+#map-root,
+.map-root,
 .map-container {
   position: relative;
   width: 100%;
-  height: 100vh;
+  height: calc(100vh - 120px); /* Account for header */
+  min-height: 500px; /* Ensure minimum visible height */
 }
 
 .mapboxgl-map {
