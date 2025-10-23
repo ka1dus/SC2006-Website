@@ -75,7 +75,8 @@ export async function loadBaseGeoJSON(): Promise<GeoJSONFeatureCollection | null
 }
 
 /**
- * Enrich GeoJSON features with population data from database
+ * Enrich GeoJSON features with population data and point feature counts from database
+ * Task: DATASET-AUDIT-AND-INGEST P2/P3
  */
 export async function enrichWithPopulation(
   fc: GeoJSONFeatureCollection,
@@ -83,6 +84,35 @@ export async function enrichWithPopulation(
 ): Promise<GeoJSONFeatureCollection> {
   // Get all populations as a map
   const populationMap = await getAllPopulationsMap();
+
+  // Get counts of point features per subzone
+  const hawkerCounts = await prisma.hawkerCentre.groupBy({
+    by: ['subzoneId'],
+    _count: { id: true },
+  });
+
+  const mrtCounts = await prisma.mRTStation.groupBy({
+    by: ['subzoneId'],
+    _count: { id: true },
+  });
+
+  const busCounts = await prisma.busStop.groupBy({
+    by: ['subzoneId'],
+    _count: { id: true },
+  });
+
+  // Create count maps
+  const hawkerCountMap = new Map(
+    hawkerCounts.map(h => [h.subzoneId, h._count.id]).filter(([id]) => id !== null)
+  );
+
+  const mrtCountMap = new Map(
+    mrtCounts.map(m => [m.subzoneId, m._count.id]).filter(([id]) => id !== null)
+  );
+
+  const busCountMap = new Map(
+    busCounts.map(b => [b.subzoneId, b._count.id]).filter(([id]) => id !== null)
+  );
 
   // Enrich each feature
   const enrichedFeatures = fc.features
@@ -102,12 +132,15 @@ export async function enrichWithPopulation(
         missing.push('population');
       }
 
-      const enrichedProperties: FeatureProperties = {
+      const enrichedProperties: any = {
         id: feature.properties.id,
         name: feature.properties.name,
         region: feature.properties.region as Region,
         populationTotal: population?.total ?? null,
         populationYear: population?.year ?? null,
+        hawkerCount: hawkerCountMap.get(subzoneId) ?? 0,      // P2
+        mrtExitCount: mrtCountMap.get(subzoneId) ?? 0,        // P3
+        busStopCount: busCountMap.get(subzoneId) ?? 0,        // P3
         missing: missing.length > 0 ? missing : undefined,
       };
 

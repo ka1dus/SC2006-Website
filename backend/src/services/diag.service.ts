@@ -12,6 +12,9 @@ export interface DiagStatus {
   subzones: number;
   populations: number;
   unmatched: number;
+  hawkerCentres: number;      // P2
+  mrtStations: number;         // P3
+  busStops: number;            // P3
   geo: {
     ok: boolean;
     features: number;
@@ -25,10 +28,20 @@ export interface DiagStatus {
  */
 export async function getSystemStatus(): Promise<DiagStatus> {
   // Count database records
-  const [subzoneCount, populationCount, unmatchedCount] = await Promise.all([
+  const [
+    subzoneCount,
+    populationCount,
+    unmatchedCount,
+    hawkerCount,
+    mrtCount,
+    busCount,
+  ] = await Promise.all([
     prisma.subzone.count(),
     prisma.population.count(),
     prisma.populationUnmatched.count(),
+    prisma.hawkerCentre.count(),
+    prisma.mRTStation.count(),
+    prisma.busStop.count(),
   ]);
 
   // Check GeoJSON availability
@@ -61,6 +74,9 @@ export async function getSystemStatus(): Promise<DiagStatus> {
     subzones: subzoneCount,
     populations: populationCount,
     unmatched: unmatchedCount,
+    hawkerCentres: hawkerCount,
+    mrtStations: mrtCount,
+    busStops: busCount,
     geo: geoStatus,
   };
 }
