@@ -47,6 +47,11 @@ model Subzone {
   population   Population?
   populationId String?     @unique
 
+  // Relations to point datasets (Task DATASET-AUDIT-AND-INGEST)
+  hawkerCentres HawkerCentre[]
+  mrtStations   MRTStation[]
+  busStops      BusStop[]
+
   // Relations to existing models
   demand          Demand?
   supply          Supply?
@@ -95,40 +100,55 @@ model DatasetSnapshot {
   @@index([kind, startedAt])
 }
 
-// Hawker Centre Data
+// Hawker Centre Data (Task DATASET-AUDIT-AND-INGEST)
 model HawkerCentre {
-  id       String @id @default(cuid())
-  centreId String @unique
-  name     String
-  location Json   // GeoJSON point
-  capacity Int
-  status   String
-  createdAt DateTime @default(now())
+  id          String   @id @default(cuid())
+  centreId    String   @unique           // NEA hawker centre ID
+  name        String
+  operator    String?                    // E.g., "NEA", "Private"
+  address     String?
+  location    Json                       // GeoJSON Point {type:"Point", coordinates:[lng,lat]}
+  subzoneId   String?                    // Assigned via point-in-polygon during ingest
+  subzone     Subzone? @relation(fields: [subzoneId], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
+  @@index([subzoneId])
   @@map("hawker_centres")
 }
 
-// MRT Station Data
+// MRT Station Data (Task DATASET-AUDIT-AND-INGEST)
+// Note: This represents MRT station exits/entrances, not just stations
 model MRTStation {
-  id        String @id @default(cuid())
-  stationId String @unique
-  name      String
-  location  Json   // GeoJSON point
-  lineCount Int
-  createdAt DateTime @default(now())
+  id          String   @id @default(cuid())
+  stationId   String   @unique               // Composite key (e.g., "NS1-EXIT_A")
+  name        String                         // Station name (e.g., "Jurong East")
+  code        String?                        // Station code (e.g., "NS1", "EW24")
+  exitCode    String?                        // Exit identifier (e.g., "A", "B", "C")
+  location    Json                           // GeoJSON Point {type:"Point", coordinates:[lng,lat]}
+  subzoneId   String?                        // Assigned via point-in-polygon during ingest
+  subzone     Subzone? @relation(fields: [subzoneId], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
+  @@index([subzoneId])
+  @@index([code])
   @@map("mrt_stations")
 }
 
-// Bus Stop Data
+// Bus Stop Data (Task DATASET-AUDIT-AND-INGEST)
 model BusStop {
-  id        String  @id @default(cuid())
-  stopCode  String  @unique
-  roadName  String
-  location  Json    // GeoJSON point
-  freqWeight Float
-  createdAt DateTime @default(now())
+  id          String   @id @default(cuid())
+  stopCode    String   @unique               // LTA bus stop code (5 digits)
+  name        String?                        // Description/Road name
+  roadName    String?                        // From LTA: RoadName field
+  location    Json                           // GeoJSON Point {type:"Point", coordinates:[lng,lat]}
+  subzoneId   String?                        // Assigned via point-in-polygon during ingest
+  subzone     Subzone? @relation(fields: [subzoneId], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
+  @@index([subzoneId])
   @@map("bus_stops")
 }
 

@@ -13,7 +13,12 @@
     "db:migrate:dev": "prisma migrate dev",
     "db:reset": "prisma migrate reset --force",
     "db:seed": "tsx prisma/seed.ts",
-    "ingest:population": "tsx src/services/ingest/population.ts",
+    "ingest:subzones": "tsx src/services/ingest/subzones.ura.ts",
+    "ingest:population": "tsx src/services/ingest/population.census2020.ts",
+    "ingest:hawker": "tsx src/services/ingest/hawker.nea.ts",
+    "ingest:mrt": "tsx src/services/ingest/mrt.ts",
+    "ingest:bus": "tsx src/services/ingest/busStops.ts",
+    "ingest:all": "npm run ingest:subzones && npm run ingest:population && npm run ingest:hawker && npm run ingest:mrt && npm run ingest:bus",
     "test": "jest",
     "test:watch": "jest --watch"
   },
