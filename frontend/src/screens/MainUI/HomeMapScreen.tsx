@@ -13,7 +13,6 @@ import { MapLegend } from './components/MapLegend';
 import { SelectionTray } from './components/SelectionTray';
 import { ClearAllButton } from './components/ClearAllButton';
 import { computeQuantiles } from '@/utils/geojson/colorScales';
-import '@/styles/map.css';
 
 export function HomeMapScreen() {
   const [geojson, setGeojson] = useState<FeatureCollection | null>(null);

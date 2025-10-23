@@ -6,6 +6,7 @@ import { Toaster } from 'react-hot-toast';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import '@/styles/globals.css';
 import '@/styles/map.css';
+import 'mapbox-gl/dist/mapbox-gl.css';
 
 const queryClient = new QueryClient({
   defaultOptions: {

@@ -7,7 +7,6 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { SubzoneAPI, type SubzoneDetail } from '@/services/subzones';
 import { formatPopulation } from '@/utils/geojson/colorScales';
-import '@/styles/map.css';
 
 export function CompareView() {
   const router = useRouter();
