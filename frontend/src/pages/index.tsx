@@ -1,44 +1,34 @@
-import { useEffect } from 'react';
-import { useRouter } from 'next/router';
 import Head from 'next/head';
-import { useAuth } from '@/contexts/AuthContext';
-import Layout from '@/components/Layout';
-import MapView from '@/components/MapView';
-import LoadingSpinner from '@/components/LoadingSpinner';
+import dynamic from 'next/dynamic';
+import '@/styles/map.css';
+
+// Dynamically import HomeMapScreen to avoid SSR issues with Mapbox
+const HomeMapScreen = dynamic(
+  () => import('@/screens/MainUI/HomeMapScreen').then(mod => mod.HomeMapScreen),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-dark-950 via-dark-900 to-dark-800">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-neon-cyan mx-auto mb-4"></div>
+          <p className="text-slate-400">Loading Map...</p>
+        </div>
+      </div>
+    ),
+  }
+);
 
 export default function Home() {
-  const { user, loading } = useAuth();
-  const router = useRouter();
-
-  // Skip authentication check since we're in demo mode
-  // useEffect(() => {
-  //   if (!loading && !user) {
-  //     router.push('/login');
-  //   }
-  // }, [user, loading, router]);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <LoadingSpinner size="lg" />
-      </div>
-    );
-  }
-
-  // Always show the map since we're in demo mode
   return (
     <>
       <Head>
         <meta httpEquiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
         <meta httpEquiv="Pragma" content="no-cache" />
         <meta httpEquiv="Expires" content="0" />
-        <title>Hawker Opportunity Score - Ultra Modern Platform</title>
+        <title>Hawker Opportunity Score - Map Analytics</title>
+        <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet" />
       </Head>
-      <Layout>
-        <div className="h-screen">
-          <MapView />
-        </div>
-      </Layout>
+      <HomeMapScreen />
     </>
   );
 }
