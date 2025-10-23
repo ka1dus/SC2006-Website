@@ -1,6 +1,5 @@
 import Head from 'next/head';
 import dynamic from 'next/dynamic';
-import '@/styles/map.css';
 
 // Dynamically import CompareView to avoid SSR issues
 const CompareView = dynamic(

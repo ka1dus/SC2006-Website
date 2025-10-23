@@ -5,7 +5,7 @@ import { MapProvider } from '@/contexts/MapContext';
 import { Toaster } from 'react-hot-toast';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import '@/styles/globals.css';
-import '@/styles/test.css';
+import '@/styles/map.css';
 
 const queryClient = new QueryClient({
   defaultOptions: {
