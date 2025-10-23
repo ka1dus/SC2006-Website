@@ -1,8 +1,9 @@
 // backend/src/database/seed.ts
 import fs from "fs";
 import path from "path";
-import { PrismaClient } from "@prisma/client";
+
 import { parse } from "csv-parse/sync";
+import { Prisma, PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 const SUBZONE_MODEL = "subzone"; // change if your model is named differently
@@ -70,53 +71,84 @@ async function main() {
     });
   }
 
-  // --- 2) Population CSV (optional) ---
-  const csvPath = path.join(
-    dataDir,
-    "ResidentPopulationbyPlanningAreaSubzoneofResidenceAgeGroupandSexCensusofPopulation2020.csv"
-  );
-  if (fs.existsSync(csvPath)) {
-    const rows = parse<Row>(fs.readFileSync(csvPath), {
-      columns: true,
-      skip_empty_lines: true,
-    });
-
-    for (const row of rows) {
-      const subzoneName =
-        row["Subzone"] ??
-        row["Subzone of Residence"] ??
-        row["SUBZONE_N"] ??
-        "";
-
-      if (!subzoneName) continue;
-
-      const total = Number(row["Total Residents"] ?? row["Total"] ?? "0");
-      const age0_14 = Number(row["0 to 14 years"] ?? "0");
-      const age15_64 = Number(row["15 to 64 years"] ?? "0");
-      const age65p = Number(row["65 years and over"] ?? "0");
-
-      if (Number.isFinite(total) && total > 0) {
-        // Find the subzone by name and create population points
-        const subzone = await prisma.subzone.findFirst({
-          where: { name: subzoneName }
-        });
-
-        if (subzone) {
-          // Create a population point at the subzone centroid
-          await prisma.populationPoint.create({
-            data: {
-              subzoneId: subzone.subzoneId,
-              location: subzone.centroid,
-              residentCount: total,
-              age0_14: age0_14,
-              age15_64: age15_64,
-              age65p: age65p
-            }
-          });
-        }
-      }
-    }
+  function computeCentroidFromPolygon(geo: any): { type: "Point"; coordinates: [number, number] } | null {
+  try {
+    if (!geo || geo.type !== "Polygon" || !Array.isArray(geo.coordinates?.[0])) return null;
+    const ring: [number, number][] = geo.coordinates[0];
+    if (ring.length === 0) return null;
+    let sx = 0, sy = 0;
+    for (const [lng, lat] of ring) { sx += lng; sy += lat; }
+    const cx = sx / ring.length;
+    const cy = sy / ring.length;
+    return { type: "Point", coordinates: [cx, cy] };
+  } catch {
+    return null;
   }
+}
+const csvPath = path.join(
+  dataDir,
+  "ResidentPopulationbyPlanningAreaSubzoneofResidenceAgeGroupandSexCensusofPopulation2020.csv"
+);
+
+if (fs.existsSync(csvPath)) {
+  type Row = Record<string, string>;
+  const rows = parse<Row>(fs.readFileSync(csvPath), {
+    columns: true,
+    skip_empty_lines: true,
+  });
+
+  for (const row of rows) {
+    // Your file uses:
+    //   - "Number" column for the subzone name (e.g., "Ang Mo Kio Town Centre")
+    //   - "Total_Total" for total population
+    const subzoneName = (row["Number"] ?? "").trim();
+    if (!subzoneName) continue;
+
+    const total = Number(row["Total_Total"] ?? "0");
+    const age0_14 = Number(row["Total_0_4"] ?? 0) + Number(row["Total_5_9"] ?? 0) + Number(row["Total_10_14"] ?? 0);
+    const age15_64 =
+      Number(row["Total_15_19"] ?? 0) + Number(row["Total_20_24"] ?? 0) + Number(row["Total_25_29"] ?? 0) +
+      Number(row["Total_30_34"] ?? 0) + Number(row["Total_35_39"] ?? 0) + Number(row["Total_40_44"] ?? 0) +
+      Number(row["Total_45_49"] ?? 0) + Number(row["Total_50_54"] ?? 0) + Number(row["Total_55_59"] ?? 0) +
+      Number(row["Total_60_64"] ?? 0);
+    const age65p =
+      Number(row["Total_65_69"] ?? 0) + Number(row["Total_70_74"] ?? 0) + Number(row["Total_75_79"] ?? 0) +
+      Number(row["Total_80_84"] ?? 0) + Number(row["Total_85_89"] ?? 0) + Number(row["Total_90andOver"] ?? 0);
+
+    if (!Number.isFinite(total) || total <= 0) continue;
+
+    const subzone = await prisma.subzone.findFirst({
+      where: { name: subzoneName },
+      select: { subzoneId: true, centroid: true, geometryPolygon: true },
+    });
+    if (!subzone) continue;
+
+    // make a safe value for the JSON column
+    const centroid = subzone.centroid as Prisma.JsonValue | null;
+    let safeLocation: Prisma.InputJsonValue | typeof Prisma.JsonNull = Prisma.JsonNull;
+
+    if (centroid && typeof centroid === "object") {
+      // already JSON-ish (GeoJSON Point)
+      safeLocation = centroid as Prisma.InputJsonValue;
+    } else {
+      // try to compute from polygon
+      const point = computeCentroidFromPolygon(subzone.geometryPolygon as any);
+      safeLocation = point ? (point as Prisma.InputJsonValue) : Prisma.JsonNull;
+    }
+
+    await prisma.populationPoint.create({
+      data: {
+        subzoneId: subzone.subzoneId,
+        // ✅ FIX: provide InputJsonValue OR Prisma.JsonNull (not raw null)
+        location: safeLocation,
+        residentCount: total,
+        age0_14,
+        age15_64,
+        age65p,
+      },
+    });
+  }
+}
 
   // --- 3) Hawker Centres ---
   const hawkerPath = path.join(dataDir, "HawkerCentresGEOJSON.geojson");
