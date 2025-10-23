@@ -10,6 +10,15 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum Region {
+  CENTRAL
+  EAST
+  NORTH
+  NORTH_EAST
+  WEST
+  UNKNOWN
+}
+
 // User Management
 model User {
   id           String   @id @default(cuid())
@@ -28,39 +37,62 @@ enum UserRole {
   ADMIN
 }
 
-// Geographic Data
 model Subzone {
-  id              String   @id @default(cuid())
-  subzoneId       String   @unique
-  name            String
-  region          String
-  geometryPolygon Json     // GeoJSON polygon
-  centroid        Json     // GeoJSON point
-  radii           Float[]  // Distance radii for analysis
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id           String   @id                    // stable URA subzone code/slug (e.g., "TAMPINES_EAST")
+  name         String   @db.VarChar(120)       // display name (e.g., "Tampines East")
+  region       Region   @default(UNKNOWN)
+  geomGeoJSON  Json?                           // optional; polygons can also be client-only GeoJSON
 
-  // Relations
+  // 1:1 simplified population snapshot (latest)
+  population   Population?
+  populationId String?     @unique
+
+  // Relations to existing models
   demand          Demand?
   supply          Supply?
   accessibility   Accessibility?
   scores          HawkerOpportunityScore[]
 
-  @@map("subzones")
+  // bookkeeping
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([name])
+  @@index([region])
 }
 
-// Population Data
-model PopulationPoint {
-  id           String @id @default(cuid())
-  subzoneId    String
-  location     Json   // GeoJSON point
-  residentCount Int
-  age0_14      Int
-  age15_64     Int
-  age65p       Int
-  createdAt    DateTime @default(now())
+model Population {
+  subzoneId   String  @id
+  subzoneName String  @db.VarChar(120)
+  year        Int
+  total       Int
 
-  @@map("population_points")
+  subzone     Subzone @relation(fields: [subzoneId], references: [id], onDelete: Cascade)
+
+  @@index([year])
+  @@index([total])
+}
+
+model PopulationUnmatched {
+  id         String   @id @default(cuid())
+  sourceKey  String   @db.VarChar(200)  // primary key or composite key from the gov dataset
+  rawName    String   @db.VarChar(200)
+  reason     String?  @db.VarChar(200)
+  details    Json?
+  createdAt  DateTime @default(now())
+}
+
+model DatasetSnapshot {
+  id          String   @id @default(cuid())
+  kind        String   @db.VarChar(64)     // e.g., "population"
+  sourceUrl   String?  @db.VarChar(500)
+  versionNote String?  @db.VarChar(200)    // optional semantic/date tag
+  startedAt   DateTime @default(now())
+  finishedAt  DateTime?
+  status      String   @db.VarChar(40)     // "success" | "partial" | "failed"
+  meta        Json?
+
+  @@index([kind, startedAt])
 }
 
 // Hawker Centre Data
@@ -109,7 +141,7 @@ model Demand {
   lambdaD   Float  // Kernel bandwidth
   createdAt DateTime @default(now())
 
-  subzone   Subzone @relation(fields: [subzoneId], references: [subzoneId], onDelete: Cascade)
+  subzone   Subzone @relation(fields: [subzoneId], references: [id], onDelete: Cascade)
 
   @@map("demand")
 }
@@ -122,7 +154,7 @@ model Supply {
   lambdaS         Float  // Kernel bandwidth
   createdAt       DateTime @default(now())
 
-  subzone         Subzone @relation(fields: [subzoneId], references: [subzoneId], onDelete: Cascade)
+  subzone         Subzone @relation(fields: [subzoneId], references: [id], onDelete: Cascade)
 
   @@map("supply")
 }
@@ -139,7 +171,7 @@ model Accessibility {
   zScore    Float
   createdAt DateTime @default(now())
 
-  subzone   Subzone @relation(fields: [subzoneId], references: [subzoneId], onDelete: Cascade)
+  subzone   Subzone @relation(fields: [subzoneId], references: [id], onDelete: Cascade)
 
   @@map("accessibility")
 }
@@ -159,7 +191,7 @@ model HawkerOpportunityScore {
   snapshotId String
   createdAt  DateTime @default(now())
 
-  subzone    Subzone @relation(fields: [subzoneId], references: [subzoneId], onDelete: Cascade)
+  subzone    Subzone @relation(fields: [subzoneId], references: [id], onDelete: Cascade)
   snapshot   Snapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
 
   @@map("hawker_opportunity_scores")

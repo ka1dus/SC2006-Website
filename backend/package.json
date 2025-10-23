@@ -9,8 +9,13 @@
     "start": "node dist/main.js",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
-    "db:migrate": "prisma migrate dev",
-    "db:seed": "tsx src/database/seed.ts"
+    "db:migrate": "prisma migrate deploy",
+    "db:migrate:dev": "prisma migrate dev",
+    "db:reset": "prisma migrate reset --force",
+    "db:seed": "tsx prisma/seed.ts",
+    "ingest:population": "tsx src/services/ingest/population.ts",
+    "test": "jest",
+    "test:watch": "jest --watch"
   },
   "dependencies": {
     "express": "^4.18.2",
