@@ -14,7 +14,7 @@ export default function MapView({ className = '' }: MapViewProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [mapError, setMapError] = useState(false);
-  const [showDataViz, setShowDataViz] = useState(true); // Default to data visualization
+  const [showDataViz, setShowDataViz] = useState(false); // Default to map view
   const { filters, setSelectedSubzone } = useMap();
 
   // Fetch subzones data
@@ -25,6 +25,9 @@ export default function MapView({ className = '' }: MapViewProps) {
       staleTime: 5 * 60 * 1000, // 5 minutes
     }
   );
+
+  // Debug logging
+  console.log('MapView - subzones:', subzones?.length, 'isLoading:', isLoading, 'error:', error);
 
   // Initialize simple map visualization
   useEffect(() => {
@@ -63,47 +66,67 @@ export default function MapView({ className = '' }: MapViewProps) {
       rect.setAttribute('fill', 'url(#grid)');
       svg.appendChild(rect);
       
-      // Add some sample subzone polygons
+      // Add subzone polygons from GeoJSON data
       if (subzones && subzones.length > 0) {
+        // Calculate bounds for proper scaling
+        let minLng = Infinity, maxLng = -Infinity, minLat = Infinity, maxLat = -Infinity;
+        
+        subzones.forEach((subzone: any) => {
+          if (subzone.geometryPolygon && subzone.geometryPolygon.coordinates) {
+            const coords = subzone.geometryPolygon.coordinates[0];
+            coords.forEach((coord: [number, number]) => {
+              minLng = Math.min(minLng, coord[0]);
+              maxLng = Math.max(maxLng, coord[0]);
+              minLat = Math.min(minLat, coord[1]);
+              maxLat = Math.max(maxLat, coord[1]);
+            });
+          }
+        });
+
+        // Scale factors to fit Singapore in the SVG viewBox
+        const scaleX = 900 / (maxLng - minLng);
+        const scaleY = 700 / (maxLat - minLat);
+        const offsetX = 50;
+        const offsetY = 50;
+
         subzones.forEach((subzone: any, index: number) => {
+          if (!subzone.geometryPolygon || !subzone.geometryPolygon.coordinates) return;
+          
           const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
           
-          // Create a simple polygon based on subzone data
-          const x = 200 + (index % 3) * 200;
-          const y = 150 + Math.floor(index / 3) * 150;
-          const size = 80;
-          
-          const points = [
-            `${x},${y}`,
-            `${x + size},${y}`,
-            `${x + size},${y + size}`,
-            `${x},${y + size}`
-          ].join(' ');
+          // Convert GeoJSON coordinates to SVG points
+          const coords = subzone.geometryPolygon.coordinates[0];
+          const points = coords.map((coord: [number, number]) => {
+            const x = offsetX + (coord[0] - minLng) * scaleX;
+            const y = offsetY + (maxLat - coord[1]) * scaleY; // Flip Y axis
+            return `${x},${y}`;
+          }).join(' ');
           
           polygon.setAttribute('points', points);
           
-          // Color based on score
+          // Color based on score or default color
           const score = subzone.score?.H || 0;
           let color = '#1e293b'; // dark-800
           if (score >= 0.8) color = '#10b981'; // emerald-500
           else if (score >= 0.6) color = '#06b6d4'; // cyan-500
           else if (score >= 0.4) color = '#2563eb'; // blue-600
           else if (score >= 0.2) color = '#eab308'; // yellow-500
+          else color = '#374151'; // gray-700 for no score
           
           polygon.setAttribute('fill', color);
           polygon.setAttribute('stroke', '#06b6d4');
-          polygon.setAttribute('stroke-width', '2');
-          polygon.setAttribute('opacity', '0.8');
+          polygon.setAttribute('stroke-width', '1');
+          polygon.setAttribute('opacity', '0.7');
           
           // Add hover effect
           polygon.addEventListener('mouseenter', () => {
-            polygon.setAttribute('opacity', '1');
-            polygon.setAttribute('stroke-width', '3');
+            polygon.setAttribute('opacity', '0.9');
+            polygon.setAttribute('stroke-width', '2');
           });
           
           polygon.addEventListener('mouseleave', () => {
-            polygon.setAttribute('opacity', '0.8');
-            polygon.setAttribute('stroke-width', '2');
+            polygon.setAttribute('opacity', '0.7');
+            polygon.setAttribute('stroke-width', '1');
           });
           
           // Add click handler
@@ -113,19 +136,17 @@ export default function MapView({ className = '' }: MapViewProps) {
           });
           
           svg.appendChild(polygon);
-          
-          // Add subzone label
-          const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-          text.setAttribute('x', (x + size/2).toString());
-          text.setAttribute('y', (y + size/2).toString());
-          text.setAttribute('text-anchor', 'middle');
-          text.setAttribute('dominant-baseline', 'middle');
-          text.setAttribute('fill', '#ffffff');
-          text.setAttribute('font-size', '12');
-          text.setAttribute('font-weight', 'bold');
-          text.textContent = subzone.name;
-          svg.appendChild(text);
         });
+
+        // Add a title showing the number of subzones loaded
+        const title = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        title.setAttribute('x', '20');
+        title.setAttribute('y', '30');
+        title.setAttribute('fill', '#ffffff');
+        title.setAttribute('font-size', '16');
+        title.setAttribute('font-weight', 'bold');
+        title.textContent = `Singapore Subzones (${subzones.length} loaded)`;
+        svg.appendChild(title);
       }
       
       if (mapContainer.current) {
@@ -159,9 +180,12 @@ export default function MapView({ className = '' }: MapViewProps) {
 
   // Show data visualization by default
   if (showDataViz || mapError) {
+    console.log('MapView - showing DataVisualization, showDataViz:', showDataViz, 'mapError:', mapError);
     return <DataVisualization />;
   }
 
+  console.log('MapView - rendering map view, subzones:', subzones?.length, 'mapLoaded:', mapLoaded);
+  
   return (
     <div className={`relative ${className}`}>
       {/* Loading Overlay */}
