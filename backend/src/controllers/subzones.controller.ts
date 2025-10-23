@@ -175,3 +175,126 @@ export async function getUnmatchedHandler(
     next(error);
   }
 }
+
+// ============================================================================
+// LEGACY HANDLER ALIASES (for backward compatibility with old routes)
+// ============================================================================
+
+/**
+ * Alias for listSubzonesHandler
+ * Used by legacy /api/subzones route
+ */
+export const getAllSubzonesHandler = listSubzonesHandler;
+
+/**
+ * Alias for getSubzoneHandler
+ * Used by legacy /api/subzones/:id route
+ */
+export const getSubzoneByIdHandler = getSubzoneHandler;
+
+// ============================================================================
+// STUB HANDLERS (501 Not Implemented - for legacy routes)
+// ============================================================================
+
+/**
+ * GET /api/subzones/:id/details (legacy)
+ * Returns 501 Not Implemented - use Task 2 API instead
+ */
+export async function getSubzoneDetailsHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    res.status(501).json({
+      error: 'NOT_IMPLEMENTED',
+      message: 'This endpoint is deprecated. Use /api/v1/subzones/:id instead.',
+      alternative: `/api/v1/subzones/${req.params.id}`,
+    });
+    return;
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * GET /api/subzones/search (legacy)
+ * Returns 501 Not Implemented - use Task 2 API instead
+ */
+export async function searchSubzonesHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    res.status(501).json({
+      error: 'NOT_IMPLEMENTED',
+      message: 'This endpoint is deprecated. Use /api/v1/subzones?q=... instead.',
+      alternative: '/api/v1/subzones?q=' + (req.query.q || ''),
+    });
+    return;
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * GET /api/subzones/regions (legacy)
+ * Returns 501 Not Implemented - hardcoded regions available client-side
+ */
+export async function getAllRegionsHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    res.status(501).json({
+      error: 'NOT_IMPLEMENTED',
+      message: 'This endpoint is deprecated. Regions are: CENTRAL, EAST, NORTH, NORTH_EAST, WEST.',
+      regions: ['CENTRAL', 'EAST', 'NORTH', 'NORTH_EAST', 'WEST', 'UNKNOWN'],
+    });
+    return;
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * GET /api/scores/latest (legacy)
+ * Returns 501 Not Implemented - scores not yet calculated
+ */
+export async function getLatestScoresHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    res.status(501).json({
+      error: 'NOT_IMPLEMENTED',
+      message: 'Score calculation not yet implemented. Coming in future tasks.',
+    });
+    return;
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * GET /api/scores/percentile (legacy)
+ * Returns 501 Not Implemented - scores not yet calculated
+ */
+export async function getScoresByPercentileHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    res.status(501).json({
+      error: 'NOT_IMPLEMENTED',
+      message: 'Score calculation not yet implemented. Coming in future tasks.',
+    });
+    return;
+  } catch (error) {
+    next(error);
+  }
+}

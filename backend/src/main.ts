@@ -7,7 +7,7 @@ import { PrismaClient } from '@prisma/client';
 // Import routers
 import apiRouter from './routers/api';
 import authRouter from './routers/auth.routes';
-// import subzonesRouter from './routers/subzones.routes'; // Old routes - disabled
+import subzonesRouter from './routers/subzones.routes'; // Legacy routes with 501 stubs
 import subzonesRouterV1 from './routers/subzones.router'; // Task 2 API
 import adminRouter from './routers/admin.routes';
 import exportRouter from './routers/export.routes';
@@ -64,8 +64,8 @@ app.get('/test-token', (req, res) => {
 // API routes
 app.use('/api', apiRouter);
 app.use('/api/auth', authRouter);
-// app.use('/api/subzones', subzonesRouter); // Old routes - disabled
-app.use('/api/v1', subzonesRouterV1); // Task 2 versioned API
+app.use('/api/subzones', subzonesRouter); // Legacy routes (return 501, redirect to /api/v1)
+app.use('/api/v1', subzonesRouterV1); // Task 2 versioned API (recommended)
 app.use('/api/admin', authMiddleware, adminRouter);
 app.use('/api/export', authMiddleware, exportRouter);
 
