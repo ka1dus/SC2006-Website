@@ -76,6 +76,14 @@ export type BatchResponse = {
  */
 export const SubzoneAPI = {
   /**
+   * Get all available regions
+   */
+  getAllRegions: async (): Promise<string[]> => {
+    // Return the available regions from the Region enum
+    return ['CENTRAL', 'EAST', 'NORTH', 'NORTH_EAST', 'WEST'];
+  },
+
+  /**
    * Get GeoJSON FeatureCollection for map rendering
    */
   geo: (region?: string): Promise<FeatureCollection> => {

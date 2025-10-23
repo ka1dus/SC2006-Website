@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery } from 'react-query';
-import { subzoneService } from '@/services/api';
+import { SubzoneAPI } from '@/services/subzones';
 import { useMap } from '@/contexts/MapContext';
 import LoadingSpinner from './LoadingSpinner';
 
@@ -12,7 +12,7 @@ export default function FilterPanel() {
   // Fetch regions
   const { data: regions, isLoading: regionsLoading } = useQuery(
     'regions',
-    subzoneService.getAllRegions,
+    SubzoneAPI.getAllRegions,
     {
       staleTime: 10 * 60 * 1000, // 10 minutes
     }
