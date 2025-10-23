@@ -27,9 +27,25 @@ export function isValidMapboxTokenFormat(token: string | null): boolean {
 }
 
 /**
+ * Check if MapLibre is forced via environment variable
+ */
+export function isMapLibreForced(): boolean {
+  const forced = process.env.NEXT_PUBLIC_USE_MAPLIBRE?.trim();
+  return forced === '1' || forced === 'true';
+}
+
+/**
  * Check if we should use MapLibre fallback
  */
 export function shouldUseMapLibreFallback(): boolean {
+  // Check forced flag first
+  if (isMapLibreForced()) {
+    if (process.env.NODE_ENV === 'development') {
+      console.info('🔧 NEXT_PUBLIC_USE_MAPLIBRE=1, forcing MapLibre mode');
+    }
+    return true;
+  }
+
   const token = getMapboxToken();
   
   // No token → use MapLibre

@@ -8,6 +8,7 @@
 
 import React, { useEffect, useState, Suspense } from 'react';
 import { SubzoneAPI, type FeatureCollection, type SubzoneListItem } from '@/services/subzones';
+import { apiGet } from '@/services/api';
 import { useSubzoneSelection } from '@/utils/hooks/useSubzoneSelection';
 import { useMapHoverFeature } from '@/utils/hooks/useMapHoverFeature';
 import { MapContainer } from './components/MapContainer';
@@ -17,18 +18,57 @@ import { ClearAllButton } from './components/ClearAllButton';
 import { PageErrorBoundary } from './components/PageErrorBoundary';
 import LoadingFallback from './components/LoadingFallback';
 import DiagBanner from './components/DiagBanner';
+import { DataStatusPanel } from './components/DataStatusPanel';
 import { computeQuantiles } from '@/utils/geojson/colorScales';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_API_BASE;
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
 
+export interface DiagStatus {
+  subzones: number;
+  populations: number;
+  unmatched: number;
+  geo: {
+    ok: boolean;
+    features: number;
+    sampleIds: string[];
+    error?: string;
+  };
+}
+
 export function HomeMapScreen() {
   const [geojson, setGeojson] = useState<FeatureCollection | null>(null);
   const [geoState, setGeoState] = useState<'loading' | 'ok' | 'fallback-ok' | 'geo-failed'>('loading');
   const [selectedSubzones, setSelectedSubzones] = useState<SubzoneListItem[]>([]);
+  const [diagStatus, setDiagStatus] = useState<DiagStatus | null>(null);
 
   const selection = useSubzoneSelection(2);
   const hover = useMapHoverFeature();
+
+  // Fetch diagnostics status
+  useEffect(() => {
+    let mounted = true;
+
+    async function fetchDiagStatus() {
+      try {
+        const status = await apiGet<DiagStatus>('/v1/diag/status');
+        if (mounted) {
+          setDiagStatus(status);
+          if (process.env.NODE_ENV === 'development') {
+            console.info('📊 System status:', status);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch diag status:', error);
+      }
+    }
+
+    fetchDiagStatus();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   // Fetch GeoJSON with fallback strategy
   useEffect(() => {
@@ -41,6 +81,39 @@ export function HomeMapScreen() {
         if (mounted) {
           setGeojson(data);
           setGeoState('ok');
+          
+          // Log diagnostics in dev mode
+          if (process.env.NODE_ENV === 'development') {
+            const bbox = data.features.length > 0
+              ? [
+                  Math.min(...data.features.flatMap(f => 
+                    f.geometry.type === 'Polygon' 
+                      ? f.geometry.coordinates[0].map((c: number[]) => c[0])
+                      : f.geometry.coordinates.flatMap((p: number[][][]) => p[0].map((c: number[]) => c[0]))
+                  )),
+                  Math.min(...data.features.flatMap(f => 
+                    f.geometry.type === 'Polygon' 
+                      ? f.geometry.coordinates[0].map((c: number[]) => c[1])
+                      : f.geometry.coordinates.flatMap((p: number[][][]) => p[0].map((c: number[]) => c[1]))
+                  )),
+                  Math.max(...data.features.flatMap(f => 
+                    f.geometry.type === 'Polygon' 
+                      ? f.geometry.coordinates[0].map((c: number[]) => c[0])
+                      : f.geometry.coordinates.flatMap((p: number[][][]) => p[0].map((c: number[]) => c[0]))
+                  )),
+                  Math.max(...data.features.flatMap(f => 
+                    f.geometry.type === 'Polygon' 
+                      ? f.geometry.coordinates[0].map((c: number[]) => c[1])
+                      : f.geometry.coordinates.flatMap((p: number[][][]) => p[0].map((c: number[]) => c[1]))
+                  )),
+                ]
+              : null;
+            
+            console.info('✅ GeoJSON OK:', {
+              count: data.features.length,
+              bbox,
+            });
+          }
         }
       } catch (primaryErr) {
         console.warn('Primary GeoJSON failed, trying fallback:', primaryErr);
@@ -155,6 +228,9 @@ export function HomeMapScreen() {
 
       {/* ALWAYS VISIBLE: Diagnostic Banner */}
       <DiagBanner apiBase={API_BASE} mapbox={MAPBOX_TOKEN} />
+
+      {/* Data Status Panel */}
+      <DataStatusPanel status={diagStatus} />
 
       {/* Main Content with Error Boundary */}
       <PageErrorBoundary>
