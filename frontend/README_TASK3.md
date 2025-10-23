@@ -24,10 +24,39 @@ Create a `.env.local` file in the frontend directory:
 # Required for API communication
 NEXT_PUBLIC_API_URL=http://localhost:3001/api
 
-# Optional - Mapbox token for production maps
-# If not set, fallback GeoJSON will be used
-NEXT_PUBLIC_MAPBOX_TOKEN=your_mapbox_token_here
+# Mapbox Token (Optional but Recommended)
+# IMPORTANT: Must be a PUBLIC token starting with "pk." (not a secret token!)
+# Required scopes: styles:read, tiles:read, fonts:read, sprites:read
+# Get your token from: https://account.mapbox.com/access-tokens/
+NEXT_PUBLIC_MAPBOX_TOKEN=pk.YourPublicTokenHere
 ```
+
+### Mapbox Token Setup
+
+1. **Get a Token:**
+   - Visit https://account.mapbox.com/access-tokens/
+   - Create a new token or use an existing one
+   - **MUST** be a **public token** (starts with `pk.`)
+   - **MUST** have these scopes: `styles:read`, `tiles:read`, `fonts:read`, `sprites:read`
+
+2. **Add to `.env.local`:**
+   ```bash
+   NEXT_PUBLIC_MAPBOX_TOKEN=pk.eyJ1Ijoi...your_actual_token...
+   ```
+
+3. **Restart Next.js:**
+   - Next.js requires a restart after `.env.local` changes
+   - Stop the dev server (Ctrl+C) and run `npm run dev` again
+
+### Token-Free Fallback
+
+**If your Mapbox token is missing or invalid**, the app will automatically:
+- ✅ Switch to **MapLibre + OpenStreetMap** (no token required)
+- ✅ Show a yellow banner explaining the fallback
+- ✅ Continue working with full functionality (polygons, selection, comparison)
+- ✅ Display in light OSM style instead of dark Mapbox style
+
+**This means the app NEVER crashes due to token issues!**
 
 ## Routes
 
