@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useQuery } from 'react-query';
-import { subzoneService } from '@/services/api';
+import { SubzoneAPI } from '@/services/subzones';
 import { useMap } from '@/contexts/MapContext';
 import LoadingSpinner from './LoadingSpinner';
 import DataVisualization from './DataVisualization';
@@ -20,7 +20,7 @@ export default function MapView({ className = '' }: MapViewProps) {
   // Fetch subzones data
   const { data: subzones, isLoading, error } = useQuery(
     ['subzones', filters],
-    () => subzoneService.getAllSubzones(filters),
+    () => SubzoneAPI.getAllSubzones(filters),
     {
       staleTime: 5 * 60 * 1000, // 5 minutes
     }

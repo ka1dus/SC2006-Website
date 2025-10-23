@@ -84,6 +84,18 @@ export const SubzoneAPI = {
   },
 
   /**
+   * Get all subzones with filters (legacy compatibility)
+   */
+  getAllSubzones: async (filters?: any): Promise<SubzoneListItem[]> => {
+    return SubzoneAPI.list({
+      region: filters?.region,
+      q: filters?.search,
+      limit: filters?.limit,
+      offset: filters?.offset,
+    });
+  },
+
+  /**
    * Get GeoJSON FeatureCollection for map rendering
    */
   geo: (region?: string): Promise<FeatureCollection> => {
