@@ -1,202 +1,177 @@
-import { Request, Response } from 'express';
-import { 
-  subzoneQuerySchema, 
-  subzoneIdSchema, 
-  scoreQuerySchema 
-} from '../schemas';
-import { 
-  getAllSubzones, 
-  getSubzoneById, 
-  getSubzoneDetails, 
-  searchSubzones,
-  getAllRegions 
-} from '../services/subzone.service';
-import { getLatestScores, getScoresByPercentile } from '../services/score.service';
+/**
+ * Subzones Controller
+ * HTTP handlers for subzone endpoints
+ */
 
-// Get all subzones with optional filtering
-export async function getAllSubzonesHandler(req: Request, res: Response) {
+import { Request, Response, NextFunction } from 'express';
+import {
+  ListQuerySchema,
+  BatchQuerySchema,
+  SubzoneIdParamSchema,
+  GeoQuerySchema,
+} from '../schemas/subzones.schemas';
+import {
+  listSubzones,
+  getSubzone,
+  getSubzonesByIds,
+  getUnmatchedPopulations,
+} from '../services/subzones.service';
+import { getEnrichedGeoJSON } from '../services/geo/geojson.service';
+
+/**
+ * GET /api/v1/subzones
+ * List subzones with optional filters
+ */
+export async function listSubzonesHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
   try {
-    const validatedQuery = subzoneQuerySchema.parse(req.query);
-    
-    const subzones = await getAllSubzones({
-      region: validatedQuery.region,
-      percentile: validatedQuery.percentile ? parseFloat(validatedQuery.percentile) : undefined,
-      search: validatedQuery.search
-    });
+    // Validate query parameters
+    const query = ListQuerySchema.parse(req.query);
 
-    res.json({
-      success: true,
-      data: { subzones }
-    });
+    // Fetch subzones
+    const subzones = await listSubzones(query);
 
-  } catch (error: any) {
-    res.status(500).json({
-      success: false,
-      error: error.message || 'Failed to fetch subzones'
-    });
+    res.json(subzones);
+    return;
+  } catch (error) {
+    next(error);
   }
 }
 
-// Get subzone by ID
-export async function getSubzoneByIdHandler(req: Request, res: Response) {
+/**
+ * GET /api/v1/subzones/:id
+ * Get single subzone details
+ */
+export async function getSubzoneHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
   try {
-    const validatedParams = subzoneIdSchema.parse(req.params);
-    
-    const subzone = await getSubzoneById(validatedParams.id);
+    // Validate path parameter
+    const { id } = SubzoneIdParamSchema.parse(req.params);
+
+    // Fetch subzone
+    const subzone = await getSubzone(id);
 
     if (!subzone) {
-      return res.status(404).json({
-        success: false,
-        error: 'Subzone not found'
+      res.status(404).json({
+        error: 'NOT_FOUND',
+        message: `Subzone with id '${id}' not found`,
       });
+      return;
     }
 
-    res.json({
-      success: true,
-      data: { subzone }
-    });
+    res.json(subzone);
     return;
-
-  } catch (error: any) {
-    res.status(500).json({
-      success: false,
-      error: error.message || 'Failed to fetch subzone'
-    });
-    return;
+  } catch (error) {
+    next(error);
   }
 }
 
-// Get detailed subzone information
-export async function getSubzoneDetailsHandler(req: Request, res: Response) {
+/**
+ * GET /api/v1/subzones:batch
+ * Get multiple subzones for comparison
+ */
+export async function batchSubzonesHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
   try {
-    const validatedParams = subzoneIdSchema.parse(req.params);
-    
-    const details = await getSubzoneDetails(validatedParams.id);
+    // Validate query parameters
+    const { ids } = BatchQuerySchema.parse(req.query);
 
-    if (!details) {
-      return res.status(404).json({
-        success: false,
-        error: 'Subzone not found'
+    // Parse IDs
+    const idArray = ids.split(',').map(id => id.trim()).filter(Boolean);
+
+    // Fetch subzones
+    const subzones = await getSubzonesByIds(idArray);
+
+    // Check if any IDs were not found
+    const foundIds = new Set(subzones.map(s => s.id));
+    const notFound = idArray.filter(id => !foundIds.has(id));
+
+    if (notFound.length > 0) {
+      // Return partial results with notFound array
+      res.json({
+        data: subzones,
+        notFound,
       });
+      return;
     }
 
-    res.json({
-      success: true,
-      data: { details }
-    });
+    res.json(subzones);
     return;
-
-  } catch (error: any) {
-    res.status(500).json({
-      success: false,
-      error: error.message || 'Failed to fetch subzone details'
-    });
-    return;
+  } catch (error) {
+    next(error);
   }
 }
 
-// Search subzones by name
-export async function searchSubzonesHandler(req: Request, res: Response) {
+/**
+ * GET /api/v1/geo/subzones
+ * Get GeoJSON FeatureCollection for map rendering
+ */
+export async function getGeoJSONHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
   try {
-    const { query } = req.query;
-    
-    if (!query || typeof query !== 'string') {
-      return res.status(400).json({
-        success: false,
-        error: 'Search query is required'
+    // Validate query parameters
+    const { region } = GeoQuerySchema.parse(req.query);
+
+    // Load and enrich GeoJSON
+    const geojson = await getEnrichedGeoJSON(region);
+
+    if (!geojson) {
+      res.status(503).json({
+        error: 'GEODATA_UNAVAILABLE',
+        message: 'GeoJSON data is temporarily unavailable. List and detail endpoints still work.',
       });
+      return;
     }
 
-    const subzones = await searchSubzones(query);
-
-    res.json({
-      success: true,
-      data: { subzones }
-    });
+    res.json(geojson);
     return;
-
-  } catch (error: any) {
-    res.status(500).json({
-      success: false,
-      error: error.message || 'Failed to search subzones'
-    });
-    return;
+  } catch (error) {
+    next(error);
   }
 }
 
-// Get all regions
-export async function getAllRegionsHandler(req: Request, res: Response) {
+/**
+ * GET /api/v1/population/unmatched
+ * Get unmatched population entries (admin/debug)
+ * Only available in development mode
+ */
+export async function getUnmatchedHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
   try {
-    const regions = await getAllRegions();
-
-    res.json({
-      success: true,
-      data: { regions }
-    });
-
-  } catch (error: any) {
-    res.status(500).json({
-      success: false,
-      error: error.message || 'Failed to fetch regions'
-    });
-  }
-}
-
-// Get latest scores
-export async function getLatestScoresHandler(req: Request, res: Response) {
-  try {
-    const validatedQuery = scoreQuerySchema.parse(req.query);
-    
-    const scores = await getLatestScores(validatedQuery.subzoneIds);
-
-    res.json({
-      success: true,
-      data: { scores }
-    });
-    return;
-
-  } catch (error: any) {
-    res.status(500).json({
-      success: false,
-      error: error.message || 'Failed to fetch scores'
-    });
-    return;
-  }
-}
-
-// Get scores by percentile
-export async function getScoresByPercentileHandler(req: Request, res: Response) {
-  try {
-    const { threshold } = req.query;
-    
-    if (!threshold || typeof threshold !== 'string') {
-      return res.status(400).json({
-        success: false,
-        error: 'Percentile threshold is required'
+    // Only allow in development
+    if (process.env.NODE_ENV === 'production') {
+      res.status(403).json({
+        error: 'FORBIDDEN',
+        message: 'This endpoint is only available in development mode',
       });
+      return;
     }
 
-    const percentile = parseFloat(threshold);
-    if (isNaN(percentile) || percentile < 0 || percentile > 100) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid percentile threshold'
-      });
-    }
+    // Parse limit and offset
+    const limit = parseInt(req.query.limit as string) || 100;
+    const offset = parseInt(req.query.offset as string) || 0;
 
-    const scores = await getScoresByPercentile(percentile);
+    // Fetch unmatched entries
+    const result = await getUnmatchedPopulations(limit, offset);
 
-    res.json({
-      success: true,
-      data: { scores }
-    });
+    res.json(result);
     return;
-
-  } catch (error: any) {
-    res.status(500).json({
-      success: false,
-      error: error.message || 'Failed to fetch scores by percentile'
-    });
-    return;
+  } catch (error) {
+    next(error);
   }
 }

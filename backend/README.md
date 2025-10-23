@@ -212,11 +212,162 @@ POST /api/auth/login      # Login
 GET  /api/auth/profile    # Get profile
 ```
 
-### Subzones
+### Subzones API v1 (Task 2)
+
+#### List Subzones
 ```
-GET  /api/subzones              # List all subzones
-GET  /api/subzones/:id          # Get subzone details
-GET  /api/subzones/search?q=... # Search by name
+GET /api/v1/subzones
+```
+
+**Query Parameters:**
+- `region` (optional): Filter by region (CENTRAL, EAST, NORTH, NORTH_EAST, WEST, UNKNOWN)
+- `ids` (optional): Comma-separated subzone IDs
+- `q` (optional): Case-insensitive search query for name
+- `limit` (optional): Max results (default: 200, max: 500)
+- `offset` (optional): Skip N results (default: 0)
+
+**Response:**
+```json
+[
+  {
+    "id": "TAMPINES_EAST",
+    "name": "Tampines East",
+    "region": "EAST",
+    "population": {
+      "total": 45000,
+      "year": 2023
+    },
+    "info": {
+      "missing": ["population"]  // Only present if data missing
+    }
+  }
+]
+```
+
+#### Get Subzone Details
+```
+GET /api/v1/subzones/:id
+```
+
+**Response:**
+```json
+{
+  "id": "TAMPINES_EAST",
+  "name": "Tampines East",
+  "region": "EAST",
+  "population": {
+    "total": 45000,
+    "year": 2023
+  },
+  "metrics": {
+    "demand": null,
+    "supply": null,
+    "accessibility": null,
+    "score": null
+  },
+  "info": {
+    "missing": ["metrics"]
+  }
+}
+```
+
+**Errors:**
+- `404 NOT_FOUND` - Subzone does not exist
+
+#### Batch Get Subzones
+```
+GET /api/v1/subzones:batch?ids=id1,id2,id3
+```
+
+**Query Parameters:**
+- `ids` (required): Comma-separated IDs (2-8 values)
+
+**Response:**
+```json
+{
+  "data": [
+    { /* SubzoneDetail */ },
+    { /* SubzoneDetail */ }
+  ],
+  "notFound": ["NONEXISTENT_ID"]  // Only present if some IDs not found
+}
+```
+
+**Errors:**
+- `400 BAD_REQUEST` - Invalid IDs (less than 2 or more than 8)
+
+#### Get GeoJSON for Map
+```
+GET /api/v1/geo/subzones
+```
+
+**Query Parameters:**
+- `region` (optional): Filter by region
+
+**Response:**
+```json
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "id": "TAMPINES_EAST",
+      "properties": {
+        "id": "TAMPINES_EAST",
+        "name": "Tampines East",
+        "region": "EAST",
+        "populationTotal": 45000,
+        "populationYear": 2023,
+        "missing": ["population"]  // Only if data missing
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[...]]
+      }
+    }
+  ]
+}
+```
+
+**Errors:**
+- `503 GEODATA_UNAVAILABLE` - GeoJSON temporarily unavailable
+
+#### Get Unmatched Population (Dev Only)
+```
+GET /api/v1/population/unmatched
+```
+
+**Query Parameters:**
+- `limit` (optional): Max results (default: 100)
+- `offset` (optional): Skip N results (default: 0)
+
+**Response:**
+```json
+{
+  "items": [
+    {
+      "id": "...",
+      "sourceKey": "...",
+      "rawName": "...",
+      "reason": "no_match",
+      "details": {...},
+      "createdAt": "..."
+    }
+  ],
+  "total": 10,
+  "limit": 100,
+  "offset": 0
+}
+```
+
+**Errors:**
+- `403 FORBIDDEN` - Only available in development mode
+
+### Legacy Endpoints
+```
+GET  /api/subzones              # List all subzones (legacy)
+GET  /api/subzones/:id          # Get subzone details (legacy)
+GET  /api/subzones/search?q=... # Search by name (legacy)
 ```
 
 ### Admin
@@ -225,7 +376,22 @@ POST /api/admin/refresh-datasets  # Trigger data refresh
 GET  /api/admin/snapshots         # List snapshots
 ```
 
-See `/docs/API.md` for complete API documentation (if available).
+### Notes on Missing Data
+
+All endpoints gracefully handle missing population data:
+- `population` is `null` when unavailable
+- `info.missing` array indicates what data is missing
+- HTTP 200 responses are still returned (non-blocking)
+- Clients should check for `missing` flags and display "—" or "No data"
+
+### GeoJSON Fallback
+
+If subzones don't have `geomGeoJSON` in the database, the API loads from:
+```
+/backend/public/data/subzones.geojson
+```
+
+This file contains simple demo polygons matching the seed data. For production, populate the database with actual URA subzone geometries.
 
 ## 🔒 Security
 

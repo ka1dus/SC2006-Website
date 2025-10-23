@@ -1,0 +1,111 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "id": "TAMPINES_EAST",
+      "properties": {
+        "id": "TAMPINES_EAST",
+        "name": "Tampines East",
+        "region": "EAST"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [103.9550, 1.3550],
+            [103.9650, 1.3550],
+            [103.9650, 1.3450],
+            [103.9550, 1.3450],
+            [103.9550, 1.3550]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "MARINE_PARADE",
+      "properties": {
+        "id": "MARINE_PARADE",
+        "name": "Marine Parade",
+        "region": "CENTRAL"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [103.9050, 1.3000],
+            [103.9150, 1.3000],
+            [103.9150, 1.2900],
+            [103.9050, 1.2900],
+            [103.9050, 1.3000]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WOODLANDS_EAST",
+      "properties": {
+        "id": "WOODLANDS_EAST",
+        "name": "Woodlands East",
+        "region": "NORTH"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [103.7900, 1.4400],
+            [103.8000, 1.4400],
+            [103.8000, 1.4300],
+            [103.7900, 1.4300],
+            [103.7900, 1.4400]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "PUNGGOL_FIELD",
+      "properties": {
+        "id": "PUNGGOL_FIELD",
+        "name": "Punggol Field",
+        "region": "NORTH_EAST"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [103.9050, 1.4050],
+            [103.9150, 1.4050],
+            [103.9150, 1.3950],
+            [103.9050, 1.3950],
+            [103.9050, 1.4050]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "JURONG_WEST_CENTRAL",
+      "properties": {
+        "id": "JURONG_WEST_CENTRAL",
+        "name": "Jurong West Central",
+        "region": "WEST"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [103.7050, 1.3400],
+            [103.7150, 1.3400],
+            [103.7150, 1.3300],
+            [103.7050, 1.3300],
+            [103.7050, 1.3400]
+          ]
+        ]
+      }
+    }
+  ]
+}
+

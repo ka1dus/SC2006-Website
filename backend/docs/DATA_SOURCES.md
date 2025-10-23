@@ -249,11 +249,67 @@ When you discover alternate names in the dataset:
 2. Verify Prisma schema is up to date: `npm run db:generate`
 3. Check for validation errors in source data
 
+## GeoJSON Data
+
+### Fallback GeoJSON File
+
+**Location**: `/backend/public/data/subzones.geojson`  
+**Purpose**: Provides demo polygon geometries when database doesn't have GeoJSON
+
+The fallback file contains simple rectangular polygons for the 5 seed subzones:
+- Tampines East (EAST)
+- Marine Parade (CENTRAL)
+- Woodlands East (NORTH)
+- Punggol Field (NORTH_EAST)
+- Jurong West Central (WEST)
+
+### Production GeoJSON
+
+For production, populate the `Subzone.geomGeoJSON` field with actual URA subzone boundaries:
+
+```typescript
+await prisma.subzone.update({
+  where: { id: 'TAMPINES_EAST' },
+  data: {
+    geomGeoJSON: {
+      type: 'Polygon',
+      coordinates: [[...]]  // Actual coordinates from URA
+    },
+  },
+});
+```
+
+The API will automatically prefer database geometries over the fallback file.
+
+### Geometry Format
+
+GeoJSON geometries should follow the standard:
+- **Type**: `Polygon` or `MultiPolygon`
+- **Coordinates**: Array of linear rings (WGS84, [longitude, latitude])
+
+Example:
+```json
+{
+  "type": "Polygon",
+  "coordinates": [
+    [
+      [103.9550, 1.3550],
+      [103.9650, 1.3550],
+      [103.9650, 1.3450],
+      [103.9550, 1.3450],
+      [103.9550, 1.3550]
+    ]
+  ]
+}
+```
+
 ## References
 
 - [Singapore Open Data Portal](https://data.gov.sg/)
 - [URA Master Plan](https://www.ura.gov.sg/maps/)
+- [URA Planning Boundaries (OneMap)](https://www.onemap.gov.sg/)
 - [Prisma Documentation](https://www.prisma.io/docs)
+- [GeoJSON Specification](https://geojson.org/)
 
 ---
 
