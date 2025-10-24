@@ -73,3 +73,10 @@ Thumbs.db
 # Temporary files
 tmp/
 temp/
+
+# Data files (large GeoJSON files)
+backend/data/*.geojson
+backend/data/*.kml
+backend/data/*.shp
+backend/data/*.json
+!backend/data/README.md
