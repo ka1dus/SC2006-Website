@@ -1,22 +1,123 @@
-# URA Master Plan 2019 Subzone Data
+# Dataset Files Directory
 
-## Required File
+This directory stores all government datasets used for ingestion into the database.
 
-Place the URA Master Plan 2019 Subzone Boundaries GeoJSON file here:
+## 📁 Expected Files
 
+Place your downloaded datasets here. Scripts will check this folder first before attempting URL fetch.
+
+### PART A: Subzones (Required ✅)
 ```
 backend/data/ura_subzones_2019.geojson
 ```
 
-## File Requirements
+### PART B: Population (Optional)
+```
+backend/data/census_2020_population.csv
+# OR
+backend/data/census_2020_population.json
+```
 
+### PART C: Point Features (Optional)
+```
+backend/data/nea_hawker_centres.json
+backend/data/mrt_station_exits.json
+backend/data/lta_bus_stops.json
+```
+
+---
+
+## 🔄 Ingestion Strategy
+
+All ingestion scripts follow this pattern:
+
+1. ✅ **Try Local File First** - Check `backend/data/` for the file
+2. 🌐 **Fallback to URL** - If file not found, try fetching from configured URL in `.env`
+3. ❌ **Clear Error** - If both fail, show helpful message
+
+### Example:
+```bash
+# From project root:
+
+# Option 1: Place file locally (recommended)
+cp ~/Downloads/census_2020_population.csv backend/data/
+
+# Option 2: Configure URL in backend/.env
+CENSUS2020_URL=https://data.gov.sg/api/.../census_2020.csv
+
+# Run ingestion (from backend directory)
+cd backend && npm run ingest:population
+```
+
+---
+
+## 📥 File Requirements
+
+### URA Subzones (ura_subzones_2019.geojson)
 - **Format:** GeoJSON FeatureCollection
-- **CRS:** WGS84 (EPSG:4326) with coordinates as [longitude, latitude]
 - **Geometry:** Polygon or MultiPolygon
-- **Properties:** Must include:
-  - Subzone identifier (code or name that can be used as stable ID)
-  - Subzone name
-  - Region information (optional, will default to "UNKNOWN" if missing)
+- **Properties:** Must include `Description` field with HTML table containing:
+  - `SUBZONE_C` (code/ID)
+  - `SUBZONE_N` (name)
+  - `REGION_N` (region)
+- **CRS:** WGS84 (EPSG:4326)
+
+### Census Population (census_2020_population.csv or .json)
+- **Format:** CSV or JSON
+- **Required Columns:**
+  - Subzone name (e.g., "Planning Area", "Subzone")
+  - Population count (e.g., "Total", "Population")
+  - Year (optional, defaults to 2020)
+- **Note:** Names will be normalized and matched to subzones
+
+### NEA Hawker Centres (nea_hawker_centres.json)
+- **Format:** GeoJSON FeatureCollection
+- **Geometry:** Point
+- **Required Properties:**
+  - `name` or `NAME` - Hawker centre name
+  - `ADDRESS` or `address` (optional)
+  - Coordinates: [longitude, latitude]
+
+### MRT Station Exits (mrt_station_exits.json)
+- **Format:** GeoJSON FeatureCollection
+- **Geometry:** Point
+- **Required Properties:**
+  - `STN_NAME` or `station` - Station name
+  - `EXIT_CODE` or `exit_code` - Exit identifier
+  - Coordinates: [longitude, latitude]
+
+### LTA Bus Stops (lta_bus_stops.json)
+- **Format:** JSON array
+- **Required Fields:**
+  - `BusStopCode` - Unique bus stop code
+  - `Description` or `RoadName` - Location description
+  - `Latitude`, `Longitude` - Coordinates
+
+---
+
+## 📚 Data Sources
+
+All datasets should ideally come from official Singapore government portals:
+
+1. **URA Master Plan 2019** - Urban Redevelopment Authority
+   - Portal: https://www.ura.gov.sg/maps/
+   - Note: May require manual download or API access
+
+2. **Census 2020 Population** - Department of Statistics
+   - Portal: https://www.singstat.gov.sg/
+   - Alternative: https://data.gov.sg/
+
+3. **NEA Hawker Centres** - National Environment Agency
+   - Portal: https://data.gov.sg/
+   - Dataset ID: Search for "hawker centres"
+
+4. **MRT Station Exits** - Land Transport Authority
+   - Portal: https://datamall.lta.gov.sg/
+   - Note: Requires LTA DataMall API key
+
+5. **Bus Stops** - Land Transport Authority
+   - Portal: https://datamall.lta.gov.sg/
+   - Note: Requires LTA DataMall API key
 
 ## Example Structure
 

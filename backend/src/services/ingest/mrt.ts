@@ -1,25 +1,73 @@
 /**
  * MRT Station Exits Ingestion Service
  * Loads MRT station exit points and assigns subzoneId via point-in-polygon
+ * 
+ * Strategy:
+ * 1. Try loading from local file (backend/data/mrt_station_exits.json)
+ * 2. Fallback to fetching from URL (MRT_EXITS_URL env var)
+ * 3. If both fail, show clear error message
+ * 
  * Task: DATASET-AUDIT-AND-INGEST P3
  */
 
 import prisma from '../../db';
 import { findSubzoneForPoint, createPointGeometry } from './utils/geo';
+import * as fs from 'fs/promises';
+import * as path from 'path';
 
+const DATA_DIR = path.join(process.cwd(), 'data');
+const LOCAL_FILE_PATH = path.join(DATA_DIR, 'mrt_station_exits.json');
 const MRT_EXITS_URL = process.env.MRT_EXITS_URL || '';
 
 /**
- * Fetch MRT exits data
+ * Fetch MRT exits data (file-first, then URL)
  */
-async function fetchMRTExits(): Promise<any[] | null> {
+async function fetchMRTExits(): Promise<{ data: any[]; source: 'file' | 'url' } | null> {
+  // Strategy 1: Try local file
+  try {
+    console.log(`📂 Checking for local file: ${LOCAL_FILE_PATH}`);
+    const fileContent = await fs.readFile(LOCAL_FILE_PATH, 'utf-8');
+    const data = JSON.parse(fileContent);
+    
+    let records: any[] = [];
+    
+    // Handle GeoJSON FeatureCollection
+    if (data.type === 'FeatureCollection' && Array.isArray(data.features)) {
+      records = data.features.map((f: any) => ({
+        ...f.properties,
+        geometry: f.geometry,
+      }));
+    }
+    // Handle direct array
+    else if (Array.isArray(data)) {
+      records = data;
+    }
+    // Handle data.gov.sg CKAN format
+    else if (data.result && data.result.records) {
+      records = data.result.records;
+    }
+    
+    console.log(`✅ Loaded ${records.length} MRT exits from local file`);
+    return { data: records, source: 'file' };
+  } catch (error: any) {
+    if (error.code !== 'ENOENT') {
+      console.error(`❌ Error reading local file:`, error);
+    }
+  }
+
+  console.log(`⚠️  No local MRT exits file found`);
+
+  // Strategy 2: Try URL
   if (!MRT_EXITS_URL) {
-    console.warn('⚠️  MRT_EXITS_URL not configured');
+    console.warn(`⚠️  MRT_EXITS_URL not configured in .env`);
+    console.log(`\n💡 To fix this, either:`);
+    console.log(`   1. Place file at: ${LOCAL_FILE_PATH}`);
+    console.log(`   2. Or set MRT_EXITS_URL in backend/.env`);
     return null;
   }
 
   try {
-    console.log(`📡 Fetching MRT exits from: ${MRT_EXITS_URL}`);
+    console.log(`🌐 Fetching MRT exits from URL: ${MRT_EXITS_URL}`);
     const response = await fetch(MRT_EXITS_URL);
     
     if (!response.ok) {
@@ -29,28 +77,32 @@ async function fetchMRTExits(): Promise<any[] | null> {
 
     const data = await response.json();
     
+    let records: any[] = [];
+    
     // Handle data.gov.sg CKAN API format
     if (data.result && data.result.records) {
-      return data.result.records;
+      records = data.result.records;
     }
-    
     // Handle GeoJSON
-    if (data.type === 'FeatureCollection' && data.features) {
-      return data.features.map((f: any) => ({
+    else if (data.type === 'FeatureCollection' && data.features) {
+      records = data.features.map((f: any) => ({
         ...f.properties,
         geometry: f.geometry,
       }));
     }
-
     // Handle array
-    if (Array.isArray(data)) {
-      return data;
+    else if (Array.isArray(data)) {
+      records = data;
+    }
+    else {
+      console.error('❌ Unexpected data format from URL');
+      return null;
     }
 
-    console.error('❌ Unexpected data format');
-    return null;
+    console.log(`✅ Fetched ${records.length} MRT exits from URL`);
+    return { data: records, source: 'url' };
   } catch (error) {
-    console.error('❌ Failed to fetch MRT exits:', error);
+    console.error('❌ Failed to fetch MRT exits from URL:', error);
     return null;
   }
 }
@@ -142,12 +194,13 @@ async function upsertMRTExit(normalized: ReturnType<typeof normalizeMRTExit>): P
  */
 async function recordSnapshot(
   status: 'success' | 'partial' | 'failed',
-  meta: any
+  meta: any,
+  sourceUrl?: string
 ) {
   await prisma.datasetSnapshot.create({
     data: {
-      kind: 'mrt',
-      sourceUrl: MRT_EXITS_URL || 'not_configured',
+      kind: 'mrt-exits',
+      sourceUrl: sourceUrl || null,
       finishedAt: new Date(),
       status,
       meta,
@@ -160,7 +213,7 @@ async function recordSnapshot(
  */
 export async function ingestMRTExits() {
   const startTime = Date.now();
-  console.log('🚀 Starting MRT exits ingestion...\n');
+  console.log('🚀 Starting MRT station exits ingestion...\n');
 
   let processedCount = 0;
   let matchedCount = 0;
@@ -169,17 +222,23 @@ export async function ingestMRTExits() {
   const errors: string[] = [];
 
   try {
-    const records = await fetchMRTExits();
+    const result = await fetchMRTExits();
     
-    if (!records) {
-      console.error('❌ No MRT exit data available');
+    if (!result) {
+      console.error('\n❌ MRT exits ingestion failed: No data source available');
+      console.log('💡 Please either:');
+      console.log(`   1. Place mrt_station_exits.json in: ${DATA_DIR}`);
+      console.log(`   2. Or set MRT_EXITS_URL in backend/.env\n`);
+      
       await recordSnapshot('failed', {
         error: 'NO_DATA_SOURCE',
-        message: 'MRT_EXITS_URL not configured or fetch failed',
+        message: 'No local file found and no URL configured',
       });
       return;
     }
 
+    const { data: records, source } = result;
+    console.log(`📊 Data source: ${source === 'file' ? 'Local file' : 'URL fetch'}`);
     console.log(`📊 Found ${records.length} MRT exit records\n`);
 
     for (const record of records) {
@@ -214,6 +273,7 @@ export async function ingestMRTExits() {
     const status = errorCount > 0 ? 'partial' : 'success';
     
     await recordSnapshot(status, {
+      source: result.source,
       totalRecords: records.length,
       processedCount,
       matchedCount,
@@ -221,19 +281,23 @@ export async function ingestMRTExits() {
       errorCount,
       duration: `${duration}ms`,
       errors: errors.slice(0, 10),
-    });
+    }, result.source === 'url' ? MRT_EXITS_URL : undefined);
 
-    console.log('\n📊 Ingestion Summary:');
-    console.log(`   Total records: ${records.length}`);
-    console.log(`   ✅ Processed: ${processedCount}`);
-    console.log(`   🎯 Matched: ${matchedCount}`);
-    console.log(`   ⚠️  Unmatched: ${unmatchedCount}`);
-    console.log(`   ❌ Errors: ${errorCount}`);
-    console.log(`   ⏱️  Duration: ${duration}ms`);
-    console.log(`   📝 Status: ${status}\n`);
+    console.log('\n════════════════════════════════════════════════════════════════════════════');
+    console.log('📊 Ingestion Summary');
+    console.log('════════════════════════════════════════════════════════════════════════════');
+    console.log(`   Data source:          ${result.source === 'file' ? 'Local file' : 'URL fetch'}`);
+    console.log(`   Total records:        ${records.length}`);
+    console.log(`   ✅ Processed:          ${processedCount}`);
+    console.log(`   🎯 Matched to subzone: ${matchedCount}`);
+    console.log(`   ⚠️  Unmatched:         ${unmatchedCount}`);
+    console.log(`   ❌ Errors:             ${errorCount}`);
+    console.log(`   ⏱️  Duration:           ${duration}ms`);
+    console.log(`   📝 Status:             ${status}`);
+    console.log('════════════════════════════════════════════════════════════════════════════\n');
 
   } catch (error) {
-    console.error('❌ Ingestion failed:', error);
+    console.error('\n❌ Fatal error during MRT exits ingestion:', error);
     
     await recordSnapshot('failed', {
       error: error instanceof Error ? error.message : String(error),
@@ -241,6 +305,8 @@ export async function ingestMRTExits() {
     });
     
     throw error;
+  } finally {
+    await prisma.$disconnect();
   }
 }
 

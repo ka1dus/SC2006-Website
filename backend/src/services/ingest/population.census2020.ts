@@ -1,38 +1,79 @@
 /**
  * Population Data Ingestion Service
  * Fetches, parses, normalizes, and upserts population data from government sources
+ * 
+ * Strategy:
+ * 1. Try loading from local file (backend/data/census_2020_population.csv or .json)
+ * 2. Fallback to fetching from URL (CENSUS2020_URL env var)
+ * 3. If both fail, show clear error message
  */
 
 import { Readable } from 'stream';
-import { prisma } from '../../db';
+import prisma from '../../db';
 import { normalizePopulationRow, NormalizedRow } from './utils/normalize';
 import { SubzoneMatcher } from './utils/geo-matcher';
+import * as fs from 'fs/promises';
+import * as path from 'path';
 
-// Default to placeholder if env var not set
-const GOV_POPULATION_DATA_URL = process.env.GOV_POPULATION_DATA_URL || '';
+const DATA_DIR = path.join(process.cwd(), 'data');
+const LOCAL_CSV_PATH = path.join(DATA_DIR, 'census_2020_population.csv');
+const LOCAL_JSON_PATH = path.join(DATA_DIR, 'census_2020_population.json');
+const CENSUS2020_URL = process.env.CENSUS2020_URL || process.env.GOV_POPULATION_DATA_URL || '';
 
 /**
- * Fetches population data from the government source
- * Returns null if URL is not configured or fetch fails
+ * Attempts to load population data from local file first, then URL
+ * Returns { data: string, source: 'file' | 'url' } or null if both fail
  */
-export async function fetchPopulationSource(): Promise<string | null> {
-  if (!GOV_POPULATION_DATA_URL) {
-    console.warn('⚠️  GOV_POPULATION_DATA_URL not configured. Skipping fetch.');
+export async function fetchPopulationSource(): Promise<{ data: string; source: 'file' | 'url' } | null> {
+  // Strategy 1: Try local CSV file
+  try {
+    console.log(`📂 Checking for local file: ${LOCAL_CSV_PATH}`);
+    const fileContent = await fs.readFile(LOCAL_CSV_PATH, 'utf-8');
+    console.log(`✅ Loaded population data from local CSV file (${fileContent.length} bytes)`);
+    return { data: fileContent, source: 'file' };
+  } catch (error: any) {
+    if (error.code !== 'ENOENT') {
+      console.error(`❌ Error reading local CSV file:`, error);
+    }
+  }
+
+  // Strategy 2: Try local JSON file
+  try {
+    console.log(`📂 Checking for local file: ${LOCAL_JSON_PATH}`);
+    const fileContent = await fs.readFile(LOCAL_JSON_PATH, 'utf-8');
+    console.log(`✅ Loaded population data from local JSON file (${fileContent.length} bytes)`);
+    return { data: fileContent, source: 'file' };
+  } catch (error: any) {
+    if (error.code !== 'ENOENT') {
+      console.error(`❌ Error reading local JSON file:`, error);
+    }
+  }
+
+  console.log(`⚠️  No local population file found`);
+
+  // Strategy 3: Try URL
+  if (!CENSUS2020_URL) {
+    console.warn(`⚠️  CENSUS2020_URL not configured in .env`);
+    console.log(`\n💡 To fix this, either:`);
+    console.log(`   1. Place file at: ${LOCAL_CSV_PATH}`);
+    console.log(`   2. Or set CENSUS2020_URL in backend/.env`);
     return null;
   }
 
   try {
-    console.log(`📡 Fetching population data from: ${GOV_POPULATION_DATA_URL}`);
-    const response = await fetch(GOV_POPULATION_DATA_URL);
+    console.log(`🌐 Fetching population data from URL: ${CENSUS2020_URL}`);
+    const response = await fetch(CENSUS2020_URL);
     
     if (!response.ok) {
       console.error(`❌ HTTP ${response.status}: ${response.statusText}`);
       return null;
     }
 
-    return await response.text();
+    const data = await response.text();
+    console.log(`✅ Fetched population data from URL (${data.length} bytes)`);
+    return { data, source: 'url' };
   } catch (error) {
-    console.error('❌ Failed to fetch population data:', error);
+    console.error('❌ Failed to fetch population data from URL:', error);
     return null;
   }
 }
@@ -112,12 +153,13 @@ async function upsertPopulation(
 async function recordSnapshot(
   kind: string,
   status: 'success' | 'partial' | 'failed',
-  meta: any
+  meta: any,
+  sourceUrl?: string
 ) {
   await prisma.datasetSnapshot.create({
     data: {
       kind,
-      sourceUrl: GOV_POPULATION_DATA_URL || null,
+      sourceUrl: sourceUrl || null,
       versionNote: meta.versionNote || null,
       startedAt: new Date(),
       finishedAt: new Date(),
@@ -133,7 +175,7 @@ async function recordSnapshot(
  */
 export async function ingestPopulationData() {
   const startTime = Date.now();
-  console.log('🚀 Starting population data ingestion...');
+  console.log('🚀 Starting Census 2020 population data ingestion...\n');
 
   let matchedCount = 0;
   let unmatchedCount = 0;
@@ -141,19 +183,26 @@ export async function ingestPopulationData() {
   const errors: string[] = [];
 
   try {
-    // Step 1: Fetch data
-    const rawData = await fetchPopulationSource();
+    // Step 1: Fetch data (file-first, then URL)
+    const result = await fetchPopulationSource();
     
-    if (!rawData) {
-      console.warn('⚠️  No data source available. Using existing seed data only.');
-      await recordSnapshot('population', 'partial', {
-        error: 'POPULATION_URL_MISSING_OR_UNREACHABLE',
-        message: 'Data source not configured or unreachable',
+    if (!result) {
+      console.error('\n❌ Population data ingestion failed: No data source available');
+      console.log('💡 Please either:');
+      console.log(`   1. Place census_2020_population.csv in: ${DATA_DIR}`);
+      console.log(`   2. Or set CENSUS2020_URL in backend/.env\n`);
+      
+      await recordSnapshot('census-2020-population', 'failed', {
+        error: 'NO_DATA_SOURCE',
+        message: 'No local file found and no URL configured',
         matchedCount: 0,
         unmatchedCount: 0,
       });
       return;
     }
+
+    const { data: rawData, source } = result;
+    console.log(`📊 Data source: ${source === 'file' ? 'Local file' : 'URL fetch'}\n`);
 
     // Step 2: Parse data
     console.log('📊 Parsing population data...');
@@ -221,34 +270,42 @@ export async function ingestPopulationData() {
     const duration = Date.now() - startTime;
     const status = errorCount > 0 ? 'partial' : 'success';
     
-    await recordSnapshot('population', status, {
+    await recordSnapshot('census-2020-population', status, {
+      source: result.source,
       totalRows: rawRows.length,
       matchedCount,
       unmatchedCount,
       errorCount,
       duration: `${duration}ms`,
       errors: errors.slice(0, 10), // Only store first 10 errors
-    });
+    }, result.source === 'url' ? CENSUS2020_URL : undefined);
 
-    console.log('\n📊 Ingestion Summary:');
-    console.log(`   Total rows: ${rawRows.length}`);
-    console.log(`   ✅ Matched: ${matchedCount}`);
-    console.log(`   ⚠️  Unmatched: ${unmatchedCount}`);
-    console.log(`   ❌ Errors: ${errorCount}`);
-    console.log(`   ⏱️  Duration: ${duration}ms`);
-    console.log('\n🎉 Population data ingestion complete!');
+    console.log('\n════════════════════════════════════════════════════════════════════════════');
+    console.log('📊 Ingestion Summary');
+    console.log('════════════════════════════════════════════════════════════════════════════');
+    console.log(`   Data source:      ${result.source === 'file' ? 'Local file' : 'URL fetch'}`);
+    console.log(`   Total rows:       ${rawRows.length}`);
+    console.log(`   ✅ Matched:        ${matchedCount}`);
+    console.log(`   ⚠️  Unmatched:     ${unmatchedCount}`);
+    console.log(`   ❌ Errors:         ${errorCount}`);
+    console.log(`   ⏱️  Duration:       ${duration}ms`);
+    console.log(`   📝 Status:         ${status}`);
+    console.log('════════════════════════════════════════════════════════════════════════════\n');
 
   } catch (error) {
-    console.error('\n❌ Fatal error during ingestion:', error);
+    console.error('\n❌ Fatal error during Census 2020 population ingestion:', error);
     
-    await recordSnapshot('population', 'failed', {
+    await recordSnapshot('census-2020-population', 'failed', {
       error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
       matchedCount,
       unmatchedCount,
       errorCount,
     });
     
     throw error;
+  } finally {
+    await prisma.$disconnect();
   }
 }
 

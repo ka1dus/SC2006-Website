@@ -1,25 +1,73 @@
 /**
  * NEA Hawker Centres Ingestion Service
  * Loads NEA hawker centre points and assigns subzoneId via point-in-polygon
+ * 
+ * Strategy:
+ * 1. Try loading from local file (backend/data/nea_hawker_centres.json)
+ * 2. Fallback to fetching from URL (NEA_HAWKER_CENTRES_URL env var)
+ * 3. If both fail, show clear error message
+ * 
  * Task: DATASET-AUDIT-AND-INGEST P2
  */
 
 import prisma from '../../db';
 import { findSubzoneForPoint, createPointGeometry } from './utils/geo';
+import * as fs from 'fs/promises';
+import * as path from 'path';
 
+const DATA_DIR = path.join(process.cwd(), 'data');
+const LOCAL_FILE_PATH = path.join(DATA_DIR, 'nea_hawker_centres.json');
 const NEA_HAWKER_CENTRES_URL = process.env.NEA_HAWKER_CENTRES_URL || '';
 
 /**
- * Fetch NEA hawker centres data
+ * Fetch NEA hawker centres data (file-first, then URL)
  */
-async function fetchHawkerCentres(): Promise<any[] | null> {
+async function fetchHawkerCentres(): Promise<{ data: any[]; source: 'file' | 'url' } | null> {
+  // Strategy 1: Try local file
+  try {
+    console.log(`📂 Checking for local file: ${LOCAL_FILE_PATH}`);
+    const fileContent = await fs.readFile(LOCAL_FILE_PATH, 'utf-8');
+    const data = JSON.parse(fileContent);
+    
+    let records: any[] = [];
+    
+    // Handle GeoJSON FeatureCollection
+    if (data.type === 'FeatureCollection' && Array.isArray(data.features)) {
+      records = data.features.map((f: any) => ({
+        ...f.properties,
+        geometry: f.geometry,
+      }));
+    }
+    // Handle direct array
+    else if (Array.isArray(data)) {
+      records = data;
+    }
+    // Handle data.gov.sg CKAN format
+    else if (data.result && data.result.records) {
+      records = data.result.records;
+    }
+    
+    console.log(`✅ Loaded ${records.length} hawker centres from local file`);
+    return { data: records, source: 'file' };
+  } catch (error: any) {
+    if (error.code !== 'ENOENT') {
+      console.error(`❌ Error reading local file:`, error);
+    }
+  }
+
+  console.log(`⚠️  No local hawker centres file found`);
+
+  // Strategy 2: Try URL
   if (!NEA_HAWKER_CENTRES_URL) {
-    console.warn('⚠️  NEA_HAWKER_CENTRES_URL not configured');
+    console.warn(`⚠️  NEA_HAWKER_CENTRES_URL not configured in .env`);
+    console.log(`\n💡 To fix this, either:`);
+    console.log(`   1. Place file at: ${LOCAL_FILE_PATH}`);
+    console.log(`   2. Or set NEA_HAWKER_CENTRES_URL in backend/.env`);
     return null;
   }
 
   try {
-    console.log(`📡 Fetching NEA hawker centres from: ${NEA_HAWKER_CENTRES_URL}`);
+    console.log(`🌐 Fetching NEA hawker centres from URL: ${NEA_HAWKER_CENTRES_URL}`);
     const response = await fetch(NEA_HAWKER_CENTRES_URL);
     
     if (!response.ok) {
@@ -29,28 +77,32 @@ async function fetchHawkerCentres(): Promise<any[] | null> {
 
     const data = await response.json();
     
+    let records: any[] = [];
+    
     // Handle data.gov.sg CKAN API format
     if (data.result && data.result.records) {
-      return data.result.records;
+      records = data.result.records;
     }
-    
     // Handle direct GeoJSON
-    if (data.type === 'FeatureCollection' && data.features) {
-      return data.features.map((f: any) => ({
+    else if (data.type === 'FeatureCollection' && data.features) {
+      records = data.features.map((f: any) => ({
         ...f.properties,
         geometry: f.geometry,
       }));
     }
-
     // Handle array of records
-    if (Array.isArray(data)) {
-      return data;
+    else if (Array.isArray(data)) {
+      records = data;
+    }
+    else {
+      console.error('❌ Unexpected data format from URL');
+      return null;
     }
 
-    console.error('❌ Unexpected data format');
-    return null;
+    console.log(`✅ Fetched ${records.length} hawker centres from URL`);
+    return { data: records, source: 'url' };
   } catch (error) {
-    console.error('❌ Failed to fetch hawker centres:', error);
+    console.error('❌ Failed to fetch hawker centres from URL:', error);
     return null;
   }
 }
@@ -141,12 +193,13 @@ async function upsertHawkerCentre(normalized: ReturnType<typeof normalizeHawkerC
  */
 async function recordSnapshot(
   status: 'success' | 'partial' | 'failed',
-  meta: any
+  meta: any,
+  sourceUrl?: string
 ) {
   await prisma.datasetSnapshot.create({
     data: {
-      kind: 'hawker',
-      sourceUrl: NEA_HAWKER_CENTRES_URL || 'not_configured',
+      kind: 'nea-hawker-centres',
+      sourceUrl: sourceUrl || null,
       finishedAt: new Date(),
       status,
       meta,
@@ -168,18 +221,24 @@ export async function ingestHawkerCentres() {
   const errors: string[] = [];
 
   try {
-    // Step 1: Fetch data
-    const records = await fetchHawkerCentres();
+    // Step 1: Fetch data (file-first, then URL)
+    const result = await fetchHawkerCentres();
     
-    if (!records) {
-      console.error('❌ No hawker centre data available');
+    if (!result) {
+      console.error('\n❌ Hawker centres ingestion failed: No data source available');
+      console.log('💡 Please either:');
+      console.log(`   1. Place nea_hawker_centres.json in: ${DATA_DIR}`);
+      console.log(`   2. Or set NEA_HAWKER_CENTRES_URL in backend/.env\n`);
+      
       await recordSnapshot('failed', {
         error: 'NO_DATA_SOURCE',
-        message: 'NEA_HAWKER_CENTRES_URL not configured or fetch failed',
+        message: 'No local file found and no URL configured',
       });
       return;
     }
 
+    const { data: records, source } = result;
+    console.log(`📊 Data source: ${source === 'file' ? 'Local file' : 'URL fetch'}`);
     console.log(`📊 Found ${records.length} hawker centre records\n`);
 
     // Step 2: Process each record
@@ -217,6 +276,7 @@ export async function ingestHawkerCentres() {
     const status = errorCount > 0 ? 'partial' : 'success';
     
     await recordSnapshot(status, {
+      source: result.source,
       totalRecords: records.length,
       processedCount,
       matchedCount,
@@ -224,19 +284,23 @@ export async function ingestHawkerCentres() {
       errorCount,
       duration: `${duration}ms`,
       errors: errors.slice(0, 10),
-    });
+    }, result.source === 'url' ? NEA_HAWKER_CENTRES_URL : undefined);
 
-    console.log('\n📊 Ingestion Summary:');
-    console.log(`   Total records: ${records.length}`);
-    console.log(`   ✅ Processed: ${processedCount}`);
+    console.log('\n════════════════════════════════════════════════════════════════════════════');
+    console.log('📊 Ingestion Summary');
+    console.log('════════════════════════════════════════════════════════════════════════════');
+    console.log(`   Data source:          ${result.source === 'file' ? 'Local file' : 'URL fetch'}`);
+    console.log(`   Total records:        ${records.length}`);
+    console.log(`   ✅ Processed:          ${processedCount}`);
     console.log(`   🎯 Matched to subzone: ${matchedCount}`);
-    console.log(`   ⚠️  Unmatched: ${unmatchedCount}`);
-    console.log(`   ❌ Errors: ${errorCount}`);
-    console.log(`   ⏱️  Duration: ${duration}ms`);
-    console.log(`   📝 Status: ${status}\n`);
+    console.log(`   ⚠️  Unmatched:         ${unmatchedCount}`);
+    console.log(`   ❌ Errors:             ${errorCount}`);
+    console.log(`   ⏱️  Duration:           ${duration}ms`);
+    console.log(`   📝 Status:             ${status}`);
+    console.log('════════════════════════════════════════════════════════════════════════════\n');
 
   } catch (error) {
-    console.error('❌ Ingestion failed:', error);
+    console.error('\n❌ Fatal error during NEA hawker centres ingestion:', error);
     
     await recordSnapshot('failed', {
       error: error instanceof Error ? error.message : String(error),
@@ -244,6 +308,8 @@ export async function ingestHawkerCentres() {
     });
     
     throw error;
+  } finally {
+    await prisma.$disconnect();
   }
 }
 
