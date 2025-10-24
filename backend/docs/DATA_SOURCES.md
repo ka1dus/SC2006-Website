@@ -109,71 +109,147 @@ npm run ingest:subzones
 
 ---
 
-## 2. Census 2020 Population (P1)
+## 2. Census 2020 Population (PART B)
 
 ### Source
 
 **Provider:** Department of Statistics, Singapore  
 **Dataset:** Singapore Residents by Planning Area/Subzone, 2020  
 **URL:** `https://data.gov.sg/api/action/datastore_search?resource_id=d_f7541ec3af57b5edb4a69c0e31e02ca3`  
-**Format:** CSV/JSON (via CKAN API)  
+**Local File:** `backend/data/census_2020_population.csv` (or `.json`)  
+**Format:** CSV/JSON (via CKAN API or local file)  
 **Update Frequency:** Annual (Census years)
 
 ### Field Mapping
 
 | Source Field | Model Field | Type | Notes |
 |--------------|-------------|------|-------|
-| `subzone` / `subzone_name` | Matched to `Subzone.id` | String | Requires normalization + matching |
-| `year` | `year` | Int | Census year (e.g., 2020) |
-| `population` / `total` | `total` | Int | Total resident population |
+| `subzone` / `subzone_name` / `Planning Area` / `name` | Matched to `Subzone.id` | String | Requires normalization + matching |
+| `year` / `Year` | `year` | Int | Census year (e.g., 2020), defaults to 2020 |
+| `population` / `total` / `Total Population` / `residents` | `total` | Int | Total resident population |
+| Various age/sex columns | Summed to `total` | Int | If no direct population field, sums numeric columns |
 
-### Name Normalization
+### Name Normalization (PART B Spec)
 
-**Rules** (in `utils/normalize.ts`):
-1. Convert to uppercase
-2. Remove special characters (e.g., brackets, hyphens)
-3. Replace multiple spaces with single space
-4. Trim whitespace
+**Rules** (in `utils/normalize.ts` → `normName()`):
+1. **NFKD normalization** (Unicode compatibility)
+2. **Remove quotes/apostrophes** (`'`, `'`, `` ` ``)
+3. **Replace hyphens/slashes with spaces** (`-`, `/` → space)
+4. **Collapse multiple spaces** to single space
+5. **Trim** and convert to **UPPERCASE**
 
 **Example:**
-```
-"Tampines East (Sub-zone 1)" → "TAMPINES EAST SUB ZONE 1"
-```
-
-### Subzone Matching
-
-**Strategy** (in `utils/geo-matcher.ts`):
-1. Exact match on normalized name
-2. Fuzzy match using aliases (e.g., "Tampines East" → "TAMPINES_EAST")
-3. Record unmatched rows in `PopulationUnmatched` table
-
-**Aliases Map:**
 ```typescript
-const ALIASES = new Map<string, string>([
-  ['TAMPINES EAST', 'TAMPINES_EAST'],
-  ['MARINE PARADE', 'MARINE_PARADE'],
-  ['WOODLANDS EAST', 'WOODLANDS_EAST'],
-  ['PUNGGOL FIELD', 'PUNGGOL_FIELD'],
-  ['JURONG WEST CENTRAL', 'JURONG_WEST_CENTRAL'],
-  // ... more aliases
-]);
+normName("Tampines' East-Central/North")
+// → "TAMPINES EAST CENTRAL NORTH"
 ```
 
-### Ingestion
+### Subzone Matching (PART B Strategy)
+
+**3-Step Strategy** (in `population.census2020.ts`):
+
+1. **Check Aliases** (in `utils/aliases.ts`):
+   ```typescript
+   export const ALIASES: Record<string, string> = {
+     // "TAMPINES E": "TAMPINES_EAST",
+     // Add entries as unmatched names appear
+   };
+   ```
+
+2. **Direct Normalized Name Match**:
+   ```typescript
+   const subzoneId = byNameNorm.get(normName(censusName));
+   ```
+
+3. **Record Unmatched**:
+   - If both fail, add to `DatasetSnapshot.meta.unmatchedSamples`
+   - Shows in diag endpoint for manual alias creation
+
+**Confidence Levels:**
+- `alias`: Matched via ALIASES map
+- `direct`: Matched via normalized name
+- `null`: No match (reason provided)
+
+### Ingestion (PART B Implementation)
 
 ```bash
+# File-first approach (recommended)
+cp ~/Downloads/census_2020_population.csv backend/data/
+cd backend && npm run ingest:population
+
+# OR URL-based (alternative)
+# Set CENSUS2020_URL in backend/.env
 npm run ingest:population
 ```
 
 **Process:**
-1. Fetch CSV/JSON from CENSUS2020_URL
-2. Parse and normalize each row
-3. Match to Subzone via geo-matcher
-4. Upsert Population (latest year only)
-5. Record unmatched rows in PopulationUnmatched
-6. Record DatasetSnapshot
+1. **Try local file first**: `backend/data/census_2020_population.csv` or `.json`
+2. **Fallback to URL**: If file not found, fetch from `CENSUS2020_URL`
+3. **Parse**: Handle CSV (papaparse) or JSON formats
+4. **Normalize**: Apply `normalizePopulationRow()` to each row
+5. **Build Lookup**: Load all subzones and create `byNameNorm` map
+6. **Match**: Apply 3-step strategy (alias → direct → unmatched)
+7. **Upsert**: In transaction, upsert matched rows (keep latest year)
+8. **Snapshot**: Record with counts, unmatched samples, duration
 
-**Idempotent:** Yes (upsert by `subzoneId`)
+**Idempotent:** Yes (upsert by `subzoneId`, keeps latest year)
+
+### Re-Running Ingestion
+
+**Safe to re-run** - handles updates correctly:
+- If same year: Updates total
+- If newer year: Updates year and total
+- If older year: Keeps existing (doesn't downgrade)
+
+**Example:**
+```bash
+# First run: Inserts 2020 data
+npm run ingest:population
+
+# Second run: No-op (same data)
+npm run ingest:population
+
+# With 2021 data: Updates to 2021
+npm run ingest:population
+```
+
+### Unmatched Names
+
+After first ingestion, check `/api/v1/diag/status` → `snapshots.population.meta.unmatchedSamples` for names that didn't match.
+
+**To resolve:**
+1. Add entries to `backend/src/services/ingest/utils/aliases.ts`:
+   ```typescript
+   export const ALIASES: Record<string, string> = {
+     "CENSUS_NAME": "URA_SUBZONE_ID",
+     "TAMPINES E": "TAMPINES_EAST",
+     "MARINE PDE": "MARINE_PARADE",
+   };
+   ```
+2. Re-run ingestion: `npm run ingest:population`
+
+### Verification
+
+**Check results:**
+```bash
+# Count matched populations
+curl http://localhost:3001/api/v1/diag/status | jq '.tables.population'
+
+# View snapshot details
+curl http://localhost:3001/api/v1/diag/status | jq '.snapshots.population'
+
+# Check sample population
+curl http://localhost:3001/api/v1/diag/status | jq '.sample.population'
+
+# Verify GeoJSON enrichment
+curl http://localhost:3001/api/v1/geo/subzones | jq '.features[0].properties | {id, name, populationTotal, populationYear}'
+```
+
+**Expected after successful ingestion:**
+- `tables.population` ≥ 300 (expecting most subzones matched)
+- `snapshots.population.status` = "success" or "partial"
+- GeoJSON features include `populationTotal` and `populationYear`
+- Features without population have `missing: ["population"]`
 
 ---
 

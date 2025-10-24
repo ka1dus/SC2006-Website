@@ -10,6 +10,7 @@ import authRouter from './routers/auth.routes';
 import subzonesRouter from './routers/subzones.routes'; // Legacy routes with 501 stubs
 import subzonesRouterV1 from './routers/subzones.router'; // Task 2 API
 import diagRouter from './routers/diag.router'; // Task DIAG-ENDTOEND diagnostics
+import populationRouter from './routers/population.routes'; // PART B Population API
 import adminRouter from './routers/admin.routes';
 import exportRouter from './routers/export.routes';
 
@@ -68,6 +69,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/subzones', subzonesRouter); // Legacy routes (return 501, redirect to /api/v1)
 app.use('/api/v1', subzonesRouterV1); // Task 2 versioned API (recommended)
 app.use('/api/v1/diag', diagRouter); // Task DIAG-ENDTOEND diagnostics
+app.use('/api/v1/population', populationRouter); // PART B Population API
 app.use('/api/admin', authMiddleware, adminRouter);
 app.use('/api/export', authMiddleware, exportRouter);
 

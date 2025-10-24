@@ -1,7 +1,7 @@
 /**
  * Diagnostics Service
  * Provides system health and data status checks
- * Task DIAG-ENDTOEND
+ * Task DIAG-ENDTOEND + PART B enhancements
  */
 
 import prisma from '../db';
@@ -9,12 +9,39 @@ import { loadBaseGeoJSON, enrichWithPopulation } from './geo/geojson.service';
 import type { GeoJSONFeatureCollection } from '../schemas/subzones.schemas';
 
 export interface DiagStatus {
+  tables: {
+    subzones: number;
+    population: number;
+  };
+  snapshots: {
+    uraSubzones?: {
+      finishedAt: Date | null;
+      status: string;
+    };
+    population?: {
+      finishedAt: Date | null;
+      status: string;
+    };
+  };
+  sample: {
+    subzone?: {
+      id: string;
+      name: string;
+      region: string;
+    };
+    population?: {
+      subzoneId: string;
+      year: number;
+      total: number;
+    };
+  };
+  // Legacy fields (kept for backward compatibility)
   subzones: number;
   populations: number;
   unmatched: number;
-  hawkerCentres: number;      // P2
-  mrtStations: number;         // P3
-  busStops: number;            // P3
+  hawkerCentres: number;
+  mrtStations: number;
+  busStops: number;
   geo: {
     ok: boolean;
     features: number;
@@ -25,6 +52,7 @@ export interface DiagStatus {
 
 /**
  * Get comprehensive system status
+ * Enhanced for PART B with detailed snapshot and sample data
  */
 export async function getSystemStatus(): Promise<DiagStatus> {
   // Count database records
@@ -43,6 +71,28 @@ export async function getSystemStatus(): Promise<DiagStatus> {
     prisma.mRTStation.count(),
     prisma.busStop.count(),
   ]);
+
+  // Get latest snapshots for key datasets
+  const uraSnapshot = await prisma.datasetSnapshot.findFirst({
+    where: { kind: 'ura-subzones' },
+    orderBy: { finishedAt: 'desc' },
+    select: { finishedAt: true, status: true },
+  });
+
+  const populationSnapshot = await prisma.datasetSnapshot.findFirst({
+    where: { kind: 'census-2020-population' },
+    orderBy: { finishedAt: 'desc' },
+    select: { finishedAt: true, status: true },
+  });
+
+  // Get sample records
+  const sampleSubzone = await prisma.subzone.findFirst({
+    select: { id: true, name: true, region: true },
+  });
+
+  const samplePopulation = await prisma.population.findFirst({
+    select: { subzoneId: true, year: true, total: true },
+  });
 
   // Check GeoJSON availability
   let geoStatus: DiagStatus['geo'] = {
@@ -71,6 +121,42 @@ export async function getSystemStatus(): Promise<DiagStatus> {
   }
 
   return {
+    // PART B structured format
+    tables: {
+      subzones: subzoneCount,
+      population: populationCount,
+    },
+    snapshots: {
+      ...(uraSnapshot && {
+        uraSubzones: {
+          finishedAt: uraSnapshot.finishedAt,
+          status: uraSnapshot.status,
+        },
+      }),
+      ...(populationSnapshot && {
+        population: {
+          finishedAt: populationSnapshot.finishedAt,
+          status: populationSnapshot.status,
+        },
+      }),
+    },
+    sample: {
+      ...(sampleSubzone && {
+        subzone: {
+          id: sampleSubzone.id,
+          name: sampleSubzone.name,
+          region: sampleSubzone.region,
+        },
+      }),
+      ...(samplePopulation && {
+        population: {
+          subzoneId: samplePopulation.subzoneId,
+          year: samplePopulation.year,
+          total: samplePopulation.total,
+        },
+      }),
+    },
+    // Legacy fields (backward compatibility)
     subzones: subzoneCount,
     populations: populationCount,
     unmatched: unmatchedCount,

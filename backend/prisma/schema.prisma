@@ -43,9 +43,8 @@ model Subzone {
   region       Region   @default(UNKNOWN)
   geomGeoJSON  Json?                           // optional; polygons can also be client-only GeoJSON
 
-  // 1:1 simplified population snapshot (latest)
+  // Relations to population (1:1 - latest year only)
   population   Population?
-  populationId String?     @unique
 
   // Relations to point datasets (Task DATASET-AUDIT-AND-INGEST)
   hawkerCentres HawkerCentre[]
@@ -66,11 +65,12 @@ model Subzone {
   @@index([region])
 }
 
+// Part B: Census 2020 Population by Subzone
 model Population {
-  subzoneId   String  @id
-  subzoneName String  @db.VarChar(120)
-  year        Int
-  total       Int
+  subzoneId   String  @id                     // FK to Subzone.id
+  subzoneName String  @db.VarChar(120)        // Denormalized for audit/debug
+  year        Int                             // Census year (e.g., 2020)
+  total       Int                             // Total resident population
 
   subzone     Subzone @relation(fields: [subzoneId], references: [id], onDelete: Cascade)
 
