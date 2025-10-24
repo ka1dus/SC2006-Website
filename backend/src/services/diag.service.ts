@@ -85,6 +85,12 @@ export async function getSystemStatus(): Promise<DiagStatus> {
     select: { finishedAt: true, status: true },
   });
 
+  const hawkerSnapshot = await prisma.datasetSnapshot.findFirst({
+    where: { kind: 'nea-hawker-centres' },
+    orderBy: { finishedAt: 'desc' },
+    select: { finishedAt: true, status: true },
+  });
+
   // Get sample records
   const sampleSubzone = await prisma.subzone.findFirst({
     select: { id: true, name: true, region: true },
@@ -92,6 +98,10 @@ export async function getSystemStatus(): Promise<DiagStatus> {
 
   const samplePopulation = await prisma.population.findFirst({
     select: { subzoneId: true, year: true, total: true },
+  });
+
+  const sampleHawker = await prisma.hawkerCentre.findFirst({
+    select: { id: true, name: true, subzoneId: true },
   });
 
   // Check GeoJSON availability
@@ -139,6 +149,12 @@ export async function getSystemStatus(): Promise<DiagStatus> {
           status: populationSnapshot.status,
         },
       }),
+      ...(hawkerSnapshot && {
+        hawker: {
+          finishedAt: hawkerSnapshot.finishedAt,
+          status: hawkerSnapshot.status,
+        },
+      }),
     },
     sample: {
       ...(sampleSubzone && {
@@ -153,6 +169,13 @@ export async function getSystemStatus(): Promise<DiagStatus> {
           subzoneId: samplePopulation.subzoneId,
           year: samplePopulation.year,
           total: samplePopulation.total,
+        },
+      }),
+      ...(sampleHawker && {
+        hawker: {
+          id: sampleHawker.id,
+          name: sampleHawker.name,
+          subzoneId: sampleHawker.subzoneId,
         },
       }),
     },

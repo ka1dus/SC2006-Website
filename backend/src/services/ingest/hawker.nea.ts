@@ -108,10 +108,10 @@ async function fetchHawkerCentres(): Promise<{ data: any[]; source: 'file' | 'ur
 }
 
 /**
- * Normalize hawker centre record
+ * Normalize hawker centre record (Part C spec)
  */
 function normalizeHawkerCentre(raw: any): {
-  centreId: string;
+  id: string;
   name: string;
   operator: string | null;
   address: string | null;
@@ -135,17 +135,22 @@ function normalizeHawkerCentre(raw: any): {
   }
 
   // Extract fields
-  const centreId = String(raw.CENTRE_ID || raw.centre_id || raw.id || raw.NAME || raw.name || '').trim();
   const name = String(raw.NAME || raw.name || raw.CENTRE_NAME || raw.centre_name || '').trim();
   const operator = raw.OPERATOR || raw.operator || null;
   const address = raw.ADDRESS || raw.address || raw.ADDRESSSTREETNAME || null;
 
-  if (!centreId || !name) {
+  if (!name) {
     return null;
   }
 
+  // Generate stable ID: use source ID if available, otherwise slug from name+coords
+  const sourceId = raw.CENTRE_ID || raw.centre_id || raw.id || null;
+  const id = sourceId 
+    ? String(sourceId).trim()
+    : `HC_${name.replace(/[^a-z0-9]/gi, '_').toUpperCase()}_${coordinates[0].toFixed(4)}_${coordinates[1].toFixed(4)}`;
+
   return {
-    centreId,
+    id,
     name,
     operator,
     address,
@@ -154,7 +159,7 @@ function normalizeHawkerCentre(raw: any): {
 }
 
 /**
- * Upsert a hawker centre with point-in-polygon matching
+ * Upsert a hawker centre with point-in-polygon matching (Part C spec)
  */
 async function upsertHawkerCentre(normalized: ReturnType<typeof normalizeHawkerCentre>): Promise<void> {
   if (!normalized) return;
@@ -169,9 +174,9 @@ async function upsertHawkerCentre(normalized: ReturnType<typeof normalizeHawkerC
   }
 
   await prisma.hawkerCentre.upsert({
-    where: { centreId: normalized.centreId },
+    where: { id: normalized.id },
     create: {
-      centreId: normalized.centreId,
+      id: normalized.id,
       name: normalized.name,
       operator: normalized.operator,
       address: normalized.address,

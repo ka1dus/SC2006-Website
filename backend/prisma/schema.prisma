@@ -100,16 +100,16 @@ model DatasetSnapshot {
   @@index([kind, startedAt])
 }
 
-// Hawker Centre Data (Task DATASET-AUDIT-AND-INGEST)
+// Part C: NEA Hawker Centres (point features with subzone assignment)
 model HawkerCentre {
-  id          String   @id @default(cuid())
-  centreId    String   @unique           // NEA hawker centre ID
-  name        String
-  operator    String?                    // E.g., "NEA", "Private"
-  address     String?
-  location    Json                       // GeoJSON Point {type:"Point", coordinates:[lng,lat]}
+  id          String   @id               // Stable ID from NEA or generated from name+coords
+  name        String   @db.VarChar(200)  // Hawker centre name
+  operator    String?  @db.VarChar(100)  // E.g., "NEA", "Private"
+  address     String?  @db.VarChar(300)  // Full address
+  location    Json                       // GeoJSON Point { type: "Point", coordinates: [lng, lat] }
   subzoneId   String?                    // Assigned via point-in-polygon during ingest
   subzone     Subzone? @relation(fields: [subzoneId], references: [id], onDelete: SetNull)
+  
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
