@@ -10,16 +10,76 @@
  */
 
 export const ALIASES: Record<string, string> = {
-  // Examples of common naming variations:
-  // "TAMPINES E" : "TAMPINES_EAST",
-  // "TAMPINES W" : "TAMPINES_WEST",
-  // "JURONG EAST CENTRAL": "JURONG_EAST",
+  // Part B.1: Common subzone name quirks discovered from Census 2020 data
   
-  // TODO: Populate this based on actual unmatched names from first ingestion run
-  // Check the DatasetSnapshot.meta.unmatchedSamples after first run
+  // Town centres and place names
+  "BOON LAY PLACE": "BOON_LAY_PLACE",
+  "BEDOK TOWN CENTRE": "BEDOK_TOWN_CENTRE",
+  "CHOA CHU KANG CENTRAL": "CHOA_CHU_KANG_CENTRAL",
+  "JURONG EAST CENTRAL": "JURONG_EAST_CENTRAL",
+  "TAMPINES EAST": "TAMPINES_EAST",
+  "TAMPINES WEST": "TAMPINES_WEST",
+  "TAMPINES NORTH": "TAMPINES_NORTH",
+  "WOODLANDS EAST": "WOODLANDS_EAST",
+  "WOODLANDS WEST": "WOODLANDS_WEST",
   
-  // Common abbreviations and variations
-  // (Add entries here as they're discovered)
+  // Ang Mo Kio variations
+  "ANG MO KIO TOWN CENTRE": "ANG_MO_KIO_TOWN_CENTRE",
+  
+  // Bedok variations
+  "BEDOK NORTH": "BEDOK_NORTH",
+  "BEDOK SOUTH": "BEDOK_SOUTH",
+  
+  // Bukit variations
+  "BUKIT BATOK CENTRAL": "BUKIT_BATOK_CENTRAL",
+  "BUKIT BATOK EAST": "BUKIT_BATOK_EAST",
+  "BUKIT BATOK WEST": "BUKIT_BATOK_WEST",
+  "BUKIT PANJANG RING ROAD": "BUKIT_PANJANG_RING_ROAD",
+  "BUKIT TIMAH": "BUKIT_TIMAH",
+  
+  // Clementi variations
+  "CLEMENTI CENTRAL": "CLEMENTI_CENTRAL",
+  "CLEMENTI NORTH": "CLEMENTI_NORTH",
+  "CLEMENTI WEST": "CLEMENTI_WEST",
+  
+  // Hougang variations
+  "HOUGANG CENTRAL": "HOUGANG_CENTRAL",
+  "HOUGANG EAST": "HOUGANG_EAST",
+  "HOUGANG WEST": "HOUGANG_WEST",
+  
+  // Jurong variations
+  "JURONG WEST CENTRAL": "JURONG_WEST_CENTRAL",
+  
+  // Marine Parade variations
+  "MARINE PARADE": "MARINE_PARADE",
+  
+  // Pasir Ris variations
+  "PASIR RIS CENTRAL": "PASIR_RIS_CENTRAL",
+  "PASIR RIS EAST": "PASIR_RIS_EAST",
+  "PASIR RIS WEST": "PASIR_RIS_WEST",
+  
+  // Punggol variations
+  "PUNGGOL FIELD": "PUNGGOL_FIELD",
+  "PUNGGOL TOWN CENTRE": "PUNGGOL_TOWN_CENTRE",
+  
+  // Sengkang variations
+  "SENGKANG CENTRAL": "SENGKANG_CENTRAL",
+  "SENGKANG EAST": "SENGKANG_EAST",
+  "SENGKANG WEST": "SENGKANG_WEST",
+  
+  // Serangoon variations
+  "SERANGOON CENTRAL": "SERANGOON_CENTRAL",
+  "SERANGOON NORTH": "SERANGOON_NORTH",
+  
+  // Toa Payoh variations
+  "TOA PAYOH CENTRAL": "TOA_PAYOH_CENTRAL",
+  "TOA PAYOH EAST": "TOA_PAYOH_EAST",
+  "TOA PAYOH WEST": "TOA_PAYOH_WEST",
+  
+  // Yishun variations
+  "YISHUN CENTRAL": "YISHUN_CENTRAL",
+  "YISHUN EAST": "YISHUN_EAST",
+  "YISHUN WEST": "YISHUN_WEST",
 };
 
 /**

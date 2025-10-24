@@ -5,9 +5,11 @@
  */
 
 /**
- * Normalizes a subzone name for matching according to Part B spec:
+ * Normalizes a subzone name for matching according to Part B.1 spec:
  * - NFKD normalization
  * - Remove quotes/apostrophes
+ * - Remove "SUBZONE" suffix
+ * - Remove parenthetical content
  * - Replace hyphens/slashes with spaces
  * - Collapse multiple spaces
  * - Trim and uppercase
@@ -18,6 +20,8 @@ export function normName(s: string): string {
   return s
     .normalize("NFKD")                    // Unicode normalization
     .replace(/['''`]/g, "")               // Remove quotes/apostrophes
+    .replace(/\bSUBZONE\b/gi, "")         // Remove "SUBZONE" word
+    .replace(/\(.*?\)/g, "")              // Remove parenthetical content
     .replace(/[-/]/g, " ")                // Hyphens/slashes → space
     .replace(/\s+/g, " ")                 // Collapse spaces
     .trim()
@@ -45,6 +49,58 @@ export function toInt(x: unknown): number | null {
   }
 
   return Math.floor(num);
+}
+
+/**
+ * Known Planning Area names (derived from URA data)
+ * These are higher-level aggregates, not subzones
+ */
+const PLANNING_AREAS = new Set([
+  'ANG MO KIO', 'BEDOK', 'BISHAN', 'BOON LAY', 'BUKIT BATOK',
+  'BUKIT MERAH', 'BUKIT PANJANG', 'BUKIT TIMAH', 'CENTRAL WATER CATCHMENT',
+  'CHANGI', 'CHOA CHU KANG', 'CLEMENTI', 'DOWNTOWN CORE', 'GEYLANG',
+  'HOUGANG', 'JURONG EAST', 'JURONG WEST', 'KALLANG', 'MANDAI',
+  'MARINE PARADE', 'MUSEUM', 'NEWTON', 'NORTH EASTERN ISLANDS', 'NOVENA',
+  'ORCHARD', 'OUTRAM', 'PASIR RIS', 'PAYA LEBAR', 'PIONEER',
+  'PUNGGOL', 'QUEENSTOWN', 'RIVER VALLEY', 'ROCHOR', 'SELETAR',
+  'SEMBAWANG', 'SENGKANG', 'SERANGOON', 'SINGAPORE RIVER', 'SOUTHERN ISLANDS',
+  'STRAITS VIEW', 'SUNGEI KADUT', 'TAMPINES', 'TANGLIN', 'TENGAH',
+  'TOA PAYOH', 'TUAS', 'WESTERN ISLANDS', 'WESTERN WATER CATCHMENT',
+  'WOODLANDS', 'YISHUN'
+]);
+
+/**
+ * Checks if a row represents a Planning Area total (not a subzone)
+ * Returns true if the row should be skipped
+ */
+export function isPlanningAreaTotal(raw: any): boolean {
+  // Check for explicit level/type column
+  const level = raw.Level || raw.level || raw.Type || raw.type || '';
+  if (level && level.toString().toUpperCase() !== 'SUBZONE') {
+    return true; // It's a planning area or other aggregate
+  }
+
+  // Check name field
+  const name = raw.Number || raw.number || raw.subzone || raw.subzone_name || 
+               raw['Subzone'] || raw['Planning Area'] || '';
+  
+  if (!name) return false;
+
+  const nameStr = name.toString().trim();
+  const nameUpper = nameStr.toUpperCase();
+
+  // Skip if name ends with " TOTAL" or " - TOTAL"
+  if (/ ?-? ?TOTAL$/i.test(nameStr)) {
+    return true;
+  }
+
+  // Skip if name matches a known planning area (after normalization)
+  const normalized = normName(nameStr);
+  if (PLANNING_AREAS.has(normalized)) {
+    return true;
+  }
+
+  return false;
 }
 
 /**
