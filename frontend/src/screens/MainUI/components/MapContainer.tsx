@@ -110,6 +110,7 @@ export function MapContainer({
   const tooltipRef = useRef<HTMLDivElement | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [provider, setProvider] = useState<MapProvider>('mapbox');
+  const [layersReady, setLayersReady] = useState(false);
   const [debugInfo, setDebugInfo] = useState({ featureCount: 0, breaks: [] as number[], lastError: '' });
 
   // Task I: Handle zoom to feature
@@ -295,6 +296,9 @@ export function MapContainer({
         });
 
         console.info('[map] adding layers. fc:', geojson.features.length, 'breaks:', breaks);
+        
+        // Mark layers as ready after adding them
+        setLayersReady(true);
       } catch (error) {
         console.error('[map] init error:', error);
         setDebugInfo(d => ({ ...d, lastError: String(error) }));
@@ -319,7 +323,7 @@ export function MapContainer({
 
   // Handle mouse events (only after layers are added)
   useEffect(() => {
-    if (!mapRef.current || !mapReady || !geojson) return;
+    if (!mapRef.current || !mapReady || !geojson || !layersReady) return;
 
     const map = mapRef.current as any;
 
@@ -410,7 +414,7 @@ export function MapContainer({
         tooltipRef.current = null;
       }
     };
-  }, [mapReady, geojson, onFeatureClick, onFeatureHover]);
+  }, [mapReady, geojson, layersReady, onFeatureClick, onFeatureHover]);
 
   return (
     <div
