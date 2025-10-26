@@ -114,6 +114,7 @@ export async function batchSubzonesHandler(
 /**
  * GET /api/v1/geo/subzones
  * Get GeoJSON FeatureCollection for map rendering
+ * PART E: Supports fields and simplify query params
  */
 export async function getGeoJSONHandler(
   req: Request,
@@ -123,9 +124,14 @@ export async function getGeoJSONHandler(
   try {
     // Validate query parameters
     const { region } = GeoQuerySchema.parse(req.query);
+    
+    // Extract optional fields and simplify params
+    const fields = req.query.fields as string | undefined;
+    const simplifyValue = req.query.simplify as string | undefined;
+    const simplifyMeters = simplifyValue ? parseInt(simplifyValue, 10) : undefined;
 
-    // Load and enrich GeoJSON
-    const geojson = await getEnrichedGeoJSON(region);
+    // Load and enrich GeoJSON with fields filtering and simplification
+    const geojson = await getEnrichedGeoJSON(region, fields, simplifyMeters);
 
     if (!geojson) {
       res.status(503).json({

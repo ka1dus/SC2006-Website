@@ -28,6 +28,7 @@
     "@turf/boolean-point-in-polygon": "^7.2.0",
     "@turf/buffer": "^7.2.0",
     "@turf/helpers": "^7.2.0",
+    "@turf/simplify": "^7.2.0",
     "@types/proj4": "^2.5.6",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",

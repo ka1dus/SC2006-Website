@@ -12,6 +12,7 @@ import {
   FeatureProperties,
 } from '../../schemas/subzones.schemas';
 import { getAllPopulationsMap } from '../subzones.service';
+import simplify from '@turf/simplify';
 
 const FALLBACK_GEOJSON_PATH = path.join(
   __dirname,
@@ -172,9 +173,12 @@ export async function enrichWithPopulation(
 
 /**
  * Get enriched GeoJSON for map rendering
+ * PART E: Supports fields filtering and topology simplification
  */
 export async function getEnrichedGeoJSON(
-  regionFilter?: Region
+  regionFilter?: Region,
+  fieldsParam?: string,
+  simplifyParam?: number
 ): Promise<GeoJSONFeatureCollection | null> {
   const baseGeoJSON = await loadBaseGeoJSON();
 
@@ -182,6 +186,55 @@ export async function getEnrichedGeoJSON(
     return null;
   }
 
-  return enrichWithPopulation(baseGeoJSON, regionFilter);
+  const enriched = await enrichWithPopulation(baseGeoJSON, regionFilter);
+  
+  // Apply field filtering
+  const requestedFields = fieldsParam
+    ? fieldsParam.split(',').map(f => f.trim())
+    : ['populationTotal', 'populationYear']; // Default
+
+  const allowedFields = [
+    'id',
+    'name',
+    'region',
+    'populationTotal',
+    'populationYear',
+    'hawkerCount',
+    'mrtExitCount',
+    'busStopCount',
+    'missing',
+  ];
+
+  // Filter properties to requested fields
+  enriched.features = enriched.features.map(feature => {
+    const props: any = {};
+    
+    // Always include minimal required properties
+    props.id = feature.properties.id;
+    props.name = feature.properties.name;
+    props.region = feature.properties.region;
+    
+    // Add requested extra fields
+    requestedFields.forEach(field => {
+      if (allowedFields.includes(field) && field in feature.properties) {
+        props[field] = feature.properties[field];
+      }
+    });
+    
+    return {
+      ...feature,
+      properties: props,
+    };
+  });
+
+  // Apply topology simplification if requested
+  if (simplifyParam && simplifyParam > 0) {
+    const tolerance = simplifyParam / 111000; // Convert meters to degrees (rough approximation)
+    enriched.features = enriched.features.map(feature =>
+      simplify(feature, { tolerance, highQuality: false })
+    );
+  }
+
+  return enriched;
 }
 
