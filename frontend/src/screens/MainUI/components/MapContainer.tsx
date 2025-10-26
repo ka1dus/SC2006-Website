@@ -21,6 +21,7 @@ interface MapContainerProps {
   hoverId: string | null;
   onFeatureClick: (id: string) => void;
   onFeatureHover: (id: string | null) => void;
+  zoomToFeature?: Feature | null; // Task I: External zoom trigger
 }
 
 /**
@@ -90,12 +91,47 @@ export function MapContainer({
   hoverId,
   onFeatureClick,
   onFeatureHover,
+  zoomToFeature,
 }: MapContainerProps) {
   const mapRef = useRef<MapInstance | null>(null);
   const tooltipRef = useRef<HTMLDivElement | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [provider, setProvider] = useState<MapProvider>('mapbox');
   const layersAddedRef = useRef(false);
+
+  // Task I: Handle zoom to feature
+  useEffect(() => {
+    if (!zoomToFeature || !mapRef.current || !mapReady) return;
+
+    const map = mapRef.current as any;
+    
+    try {
+      // Calculate bbox for the feature
+      const bounds: number[] = [Infinity, Infinity, -Infinity, -Infinity];
+      
+      if (zoomToFeature.geometry.type === 'Polygon') {
+        zoomToFeature.geometry.coordinates[0].forEach((coord: number[]) => {
+          bounds[0] = Math.min(bounds[0], coord[0]);
+          bounds[1] = Math.min(bounds[1], coord[1]);
+          bounds[2] = Math.max(bounds[2], coord[0]);
+          bounds[3] = Math.max(bounds[3], coord[1]);
+        });
+      } else if (zoomToFeature.geometry.type === 'MultiPolygon') {
+        zoomToFeature.geometry.coordinates.forEach((polygon: number[][][]) => {
+          polygon[0].forEach((coord: number[]) => {
+            bounds[0] = Math.min(bounds[0], coord[0]);
+            bounds[1] = Math.min(bounds[1], coord[1]);
+            bounds[2] = Math.max(bounds[2], coord[0]);
+            bounds[3] = Math.max(bounds[3], coord[1]);
+          });
+        });
+      }
+
+      map.fitBounds([[bounds[0], bounds[1]], [bounds[2], bounds[3]]], { padding: 100, duration: 1000 });
+    } catch (error) {
+      console.error('Failed to zoom to feature:', error);
+    }
+  }, [zoomToFeature, mapReady]);
 
   // Validate GeoJSON on mount
   useEffect(() => {

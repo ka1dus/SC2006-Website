@@ -13,8 +13,10 @@ import { useSubzoneSelection } from '@/utils/hooks/useSubzoneSelection';
 import { useMapHoverFeature } from '@/utils/hooks/useMapHoverFeature';
 import { MapContainer } from './components/MapContainer';
 import { MapLegend } from './components/MapLegend';
+import { SubzoneSearch } from './components/SubzoneSearch';
 import { SelectionTray } from './components/SelectionTray';
 import { ComparePanel } from './components/ComparePanel';
+import { PerformancePanel } from './components/PerformancePanel';
 import { ClearAllButton } from './components/ClearAllButton';
 import { PageErrorBoundary } from './components/PageErrorBoundary';
 import LoadingFallback from './components/LoadingFallback';
@@ -22,6 +24,7 @@ import DiagBanner from './components/DiagBanner';
 import { DataStatusPanel } from './components/DataStatusPanel';
 import { bucketIndex } from '@/utils/geojson/colorScales';
 import { useRouter } from 'next/router';
+import type { Feature } from '@/services/subzones';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_API_BASE;
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
@@ -44,6 +47,9 @@ export function HomeMapScreen() {
   const [selectedSubzones, setSelectedSubzones] = useState<SubzoneListItem[]>([]);
   const [diagStatus, setDiagStatus] = useState<DiagStatus | null>(null);
   const [quantiles, setQuantiles] = useState<QuantilesResponse | null>(null);
+  const [zoomToFeature, setZoomToFeature] = useState<Feature | null>(null);
+  const [simplify, setSimplify] = useState(50);
+  const [includeExtraFields, setIncludeExtraFields] = useState(true);
 
   const selection = useSubzoneSelection(2);
   const hover = useMapHoverFeature();
@@ -103,16 +109,19 @@ export function HomeMapScreen() {
     };
   }, []);
 
-  // Fetch GeoJSON with fallback strategy (Part E: includes transit counts)
+  // Fetch GeoJSON with fallback strategy (Task J: dynamic simplify and fields)
   useEffect(() => {
     let mounted = true;
 
     async function fetchGeoJSON() {
       try {
         setGeoState('loading');
+        const fields = includeExtraFields
+          ? ['hawkerCount', 'mrtExitCount', 'busStopCount']
+          : undefined;
         const data = await SubzoneAPI.geo({
-          fields: ['hawkerCount', 'mrtExitCount', 'busStopCount'],
-          simplify: 50, // Reduce coordinate count for performance
+          fields,
+          simplify,
         });
         if (mounted) {
           setGeojson(data);
@@ -178,7 +187,7 @@ export function HomeMapScreen() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [simplify, includeExtraFields]); // Task J: Refetch when simplify or fields change
 
   // Update selected subzones details when selection changes
   useEffect(() => {
@@ -403,9 +412,31 @@ export function HomeMapScreen() {
                   hoverId={hover.hoverId}
                   onFeatureClick={selection.toggle}
                   onFeatureHover={hover.onEnter}
+                  zoomToFeature={zoomToFeature}
                 />
 
+                {/* Task I: Subzone Search */}
+                {geojson && (
+                  <SubzoneSearch
+                    geojson={geojson}
+                    onZoom={(f) => {
+                      setZoomToFeature(f);
+                      // Reset after a short delay to allow re-zooming if needed
+                      setTimeout(() => setZoomToFeature(null), 1200);
+                    }}
+                    onSelect={(f) => selection.toggle(f.properties.id)}
+                  />
+                )}
+
                 <MapLegend breaks={breaks} />
+
+                {/* Task J: Performance Panel (dev-only) */}
+                <PerformancePanel
+                  simplify={simplify}
+                  includeExtraFields={includeExtraFields}
+                  onSimplifyChange={setSimplify}
+                  onExtraFieldsChange={setIncludeExtraFields}
+                />
 
                 {/* Task H: Compare Panel when 1-2 subzones selected */}
                 {selection.count >= 1 && geojson && (
