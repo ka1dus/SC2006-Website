@@ -39,6 +39,11 @@ export default function BaseMap({ onReady }: BaseMapProps) {
     const token = getMapboxToken();
     const useMapLibre = shouldUseMapLibreFallback();
 
+    // Clear error if using MapLibre
+    if (useMapLibre) {
+      setMapError(null);
+    }
+
     let map: MapInstance;
 
     try {
@@ -46,9 +51,7 @@ export default function BaseMap({ onReady }: BaseMapProps) {
         // MapLibre with OSM style (no token required)
         setProvider('maplibre');
         
-        if (process.env.NODE_ENV === 'development') {
-          console.info('🗺️ Initializing MapLibre with OSM basemap (token-free)');
-        }
+        console.info('🗺️ Map provider: MapLibre (OSM)');
 
         map = new maplibregl.Map({
           container: containerRef.current,
@@ -60,20 +63,18 @@ export default function BaseMap({ onReady }: BaseMapProps) {
         // Mapbox with token
         setProvider('mapbox');
         
-        if (process.env.NODE_ENV === 'development') {
-          console.info('🗺️ Initializing Mapbox with dark style');
-        }
+        console.info('🗺️ Map provider: Mapbox (dark style)');
 
         (mapboxgl as any).accessToken = token!;
         map = new mapboxgl.Map({
           container: containerRef.current,
-          style: 'mapbox://styles/mapbox/dark-v11',
+          style: 'mapbox://styles/mapbox/light-v11',
           center: [103.8198, 1.3521], // Singapore
-          zoom: 10.5,
+          zoom: 10.2,
         });
 
         // Verify token (non-blocking)
-        map.on('error', (e: any) => {
+        map.once('error', (e: any) => {
           const message = e.error?.message || String(e);
           
           if (message.includes('token') || message.includes('Unauthorized')) {
@@ -82,6 +83,11 @@ export default function BaseMap({ onReady }: BaseMapProps) {
           } else {
             console.error('Mapbox error:', e);
           }
+        });
+        
+        // Clear error on successful load
+        map.once('load', () => {
+          setMapError(null);
         });
       }
 
@@ -92,10 +98,8 @@ export default function BaseMap({ onReady }: BaseMapProps) {
       map.addControl(new NavigationControl(), 'top-left');
 
       // Notify parent when map is ready
-      map.on('load', () => {
-        if (process.env.NODE_ENV === 'development') {
-          console.info(`✅ ${useMapLibre ? 'MapLibre' : 'Mapbox'} map loaded successfully`);
-        }
+      map.once('load', () => {
+        console.info(`✅ ${useMapLibre ? 'MapLibre' : 'Mapbox'} map loaded successfully`);
         onReadyRef.current(map, useMapLibre ? 'maplibre' : 'mapbox');
       });
 
