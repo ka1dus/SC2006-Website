@@ -5,7 +5,7 @@
  */
 
 import { Router } from 'express';
-import { getStatusHandler } from '../controllers/diag.controller';
+import { getStatusHandler, getReadyHandler } from '../controllers/diag.controller';
 
 const router = Router();
 
@@ -14,6 +14,12 @@ const router = Router();
  * Comprehensive system status (DB counts, GeoJSON availability)
  */
 router.get('/status', getStatusHandler);
+
+/**
+ * GET /api/v1/diag/ready
+ * Task K: Health check endpoint for production readiness
+ */
+router.get('/ready', getReadyHandler);
 
 export default router;
 

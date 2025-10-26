@@ -16,7 +16,7 @@ import {
   getSubzonesByIds,
   getUnmatchedPopulations,
 } from '../services/subzones.service';
-import { getEnrichedGeoJSON } from '../services/geo/geojson.service';
+import { getEnrichedGeoJSON, getEnrichedGeoJSONWithCache, validateGeoJSONGeometry } from '../services/geo/geojson.service';
 
 /**
  * GET /api/v1/subzones
@@ -130,14 +130,42 @@ export async function getGeoJSONHandler(
     const simplifyValue = req.query.simplify as string | undefined;
     const simplifyMeters = simplifyValue ? parseInt(simplifyValue, 10) : undefined;
 
-    // Load and enrich GeoJSON with fields filtering and simplification
-    const geojson = await getEnrichedGeoJSON(region, fields, simplifyMeters);
+    // Task K: Get enriched GeoJSON with caching
+    const { data: geojson, etag } = await getEnrichedGeoJSONWithCache(region, fields, simplifyMeters);
 
     if (!geojson) {
       res.status(503).json({
         error: 'GEODATA_UNAVAILABLE',
         message: 'GeoJSON data is temporarily unavailable. List and detail endpoints still work.',
       });
+      return;
+    }
+
+    // Task K: Validate geometry types
+    const invalidFeatures = geojson.features.filter(
+      (f) => !validateGeoJSONGeometry(f.geometry)
+    );
+    
+    if (invalidFeatures.length > 0) {
+      console.error(`❌ Invalid geometry types: ${invalidFeatures.length} features`);
+      invalidFeatures.forEach((f, idx) => {
+        console.error(`  ${idx}: ${f.properties.id} - ${f.geometry.type}`);
+      });
+      res.status(500).json({
+        error: 'INVALID_GEOJSON',
+        message: 'GeoJSON contains invalid geometry types',
+      });
+      return;
+    }
+
+    // Task K: Set caching headers
+    res.set('Cache-Control', 'public, max-age=300'); // 5 minutes
+    res.set('ETag', `"${etag}"`);
+    
+    // Check If-None-Match for 304 Not Modified
+    const ifNoneMatch = req.headers['if-none-match'];
+    if (ifNoneMatch === `"${etag}"`) {
+      res.status(304).end();
       return;
     }
 

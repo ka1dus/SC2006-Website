@@ -7,9 +7,23 @@
 import { Request, Response } from 'express';
 import prisma from '../db';
 
-// In-memory cache for quantiles (5 minutes TTL)
-let quantileCache: { data: any; timestamp: number } | null = null;
+// Task K: In-memory cache for quantiles (5 minutes TTL)
+interface QuantileCacheEntry {
+  data: any;
+  etag: string;
+  timestamp: number;
+}
+
+let quantileCache: QuantileCacheEntry | null = null;
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Generate ETag from data
+ */
+function generateETag(data: any): string {
+  const crypto = require('crypto');
+  return crypto.createHash('md5').update(JSON.stringify(data)).digest('hex');
+}
 
 /**
  * GET /api/v1/stats/population-quantiles?k=5
@@ -31,7 +45,17 @@ export async function getPopulationQuantilesHandler(req: Request, res: Response)
     if (quantileCache && Date.now() - quantileCache.timestamp < CACHE_TTL_MS) {
       const cached = quantileCache.data;
       if (cached.k === k) {
-        // Add cache hit indicator
+        // Task K: Set caching headers
+        res.set('Cache-Control', 'public, max-age=300');
+        res.set('ETag', `"${quantileCache.etag}"`);
+        
+        // Check If-None-Match for 304 Not Modified
+        const ifNoneMatch = req.headers['if-none-match'];
+        if (ifNoneMatch === `"${quantileCache.etag}"`) {
+          res.status(304).end();
+          return;
+        }
+        
         res.set('X-Cache', 'HIT');
         res.json(cached);
         return;
@@ -74,12 +98,17 @@ export async function getPopulationQuantilesHandler(req: Request, res: Response)
       breaks,
     };
 
-    // Update cache
+    // Task K: Update cache with ETag
+    const etag = generateETag(result);
     quantileCache = {
       data: result,
+      etag,
       timestamp: Date.now(),
     };
 
+    // Task K: Set caching headers
+    res.set('Cache-Control', 'public, max-age=300');
+    res.set('ETag', `"${etag}"`);
     res.set('X-Cache', 'MISS');
     res.json(result);
     return;

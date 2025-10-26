@@ -19,6 +19,24 @@ const FALLBACK_GEOJSON_PATH = path.join(
   '../../../public/data/subzones.geojson'
 );
 
+// Task K: In-memory cache for enriched GeoJSON
+interface CacheEntry {
+  data: GeoJSONFeatureCollection;
+  etag: string;
+  timestamp: number;
+}
+
+let enrichedCache: CacheEntry | null = null;
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Generate ETag from data
+ */
+function generateETag(data: any): string {
+  const crypto = require('crypto');
+  return crypto.createHash('md5').update(JSON.stringify(data)).digest('hex');
+}
+
 /**
  * Load base GeoJSON from database or fallback file
  */
@@ -236,5 +254,41 @@ export async function getEnrichedGeoJSON(
   }
 
   return enriched;
+}
+
+/**
+ * Task K: Get enriched GeoJSON with caching
+ */
+export async function getEnrichedGeoJSONWithCache(
+  regionFilter?: Region,
+  fieldsParam?: string,
+  simplifyParam?: number
+): Promise<{ data: GeoJSONFeatureCollection | null; etag: string }> {
+  // Check cache (only if no params to maintain cache simplicity)
+  if (!regionFilter && !fieldsParam && !simplifyParam && enrichedCache) {
+    const age = Date.now() - enrichedCache.timestamp;
+    if (age < CACHE_TTL_MS) {
+      return { data: enrichedCache.data, etag: enrichedCache.etag };
+    }
+  }
+
+  // Fetch fresh data
+  const data = await getEnrichedGeoJSON(regionFilter, fieldsParam, simplifyParam);
+  const etag = data ? generateETag(data) : '';
+
+  // Cache it (only if no params)
+  if (!regionFilter && !fieldsParam && !simplifyParam && data) {
+    enrichedCache = { data, etag, timestamp: Date.now() };
+  }
+
+  return { data, etag };
+}
+
+/**
+ * Task K: Validate GeoJSON geometry types
+ */
+export function validateGeoJSONGeometry(geometry: any): boolean {
+  if (!geometry || !geometry.type) return false;
+  return ['Polygon', 'MultiPolygon'].includes(geometry.type);
 }
 
