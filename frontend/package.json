@@ -8,7 +8,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:headed": "playwright test --headed"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.3.2",
@@ -40,8 +43,10 @@
     "zod": "^3.22.4"
   },
   "devDependencies": {
+    "@playwright/test": "^1.56.1",
     "@types/mapbox-gl": "^2.7.18",
     "eslint": "^8.56.0",
-    "eslint-config-next": "^14.0.4"
+    "eslint-config-next": "^14.0.4",
+    "playwright": "^1.56.1"
   }
 }
