@@ -18,6 +18,7 @@
     "@mapbox/mapbox-gl-geocoder": "^5.0.1",
     "@tailwindcss/forms": "^0.5.7",
     "@tailwindcss/typography": "^0.5.10",
+    "@turf/bbox": "^7.2.0",
     "@types/node": "^20.10.5",
     "@types/react": "^18.2.45",
     "@types/react-dom": "^18.2.18",

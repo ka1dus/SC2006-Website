@@ -14,6 +14,8 @@ import {
   formatPopulation,
 } from '@/utils/geojson/colorScales';
 import BaseMap, { type MapInstance, type MapProvider } from './BaseMap';
+import bbox from '@turf/bbox';
+import { MapDebugPanel } from './MapDebugPanel';
 
 interface MapContainerProps {
   geojson: FeatureCollection;
@@ -85,6 +87,15 @@ function validateFeatureCollection(fc: FeatureCollection): {
   return { valid, errors, stats };
 }
 
+/**
+ * Find the first symbol layer ID to insert our layers above the basemap
+ */
+function firstSymbolLayerId(map: any): string | undefined {
+  const layers = map.getStyle()?.layers || [];
+  const sym = layers.find((l: any) => l.type === 'symbol');
+  return sym?.id;
+}
+
 export function MapContainer({
   geojson,
   selectedIds,
@@ -97,6 +108,7 @@ export function MapContainer({
   const tooltipRef = useRef<HTMLDivElement | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [provider, setProvider] = useState<MapProvider>('mapbox');
+  const [debugInfo, setDebugInfo] = useState({ featureCount: 0, breaks: [] as number[], lastError: '' });
 
   // Task I: Handle zoom to feature
   useEffect(() => {
@@ -198,6 +210,9 @@ export function MapContainer({
           (map.getSource(srcId) as any).setData(geojson);
         }
 
+        // Get beforeId to ensure layers render above basemap
+        const beforeId = firstSymbolLayerId(map);
+
         // Idempotent: Add fill layer
         if (!map.getLayer('subzones-fill')) {
           map.addLayer({
@@ -206,9 +221,12 @@ export function MapContainer({
             source: srcId,
             paint: {
               'fill-color': fillColorExpression,
-              'fill-opacity': 0.7,
+              'fill-opacity': 0.65,
             },
-          });
+          }, beforeId);
+        } else {
+          map.setPaintProperty('subzones-fill', 'fill-color', fillColorExpression);
+          map.setPaintProperty('subzones-fill', 'fill-opacity', 0.65);
         }
 
         // Idempotent: Add outline layer
@@ -218,10 +236,10 @@ export function MapContainer({
             type: 'line',
             source: srcId,
             paint: {
-              'line-color': '#60a5fa',
-              'line-width': 1,
+              'line-color': '#2f5aa8',
+              'line-width': 0.6,
             },
-          });
+          }, beforeId);
         }
 
         // Idempotent: Add selected highlight layer
@@ -230,12 +248,14 @@ export function MapContainer({
             id: 'subzones-selected',
             type: 'line',
             source: srcId,
-            filter: ['in', ['get', 'id'], ['literal', []]],
+            filter: ['in', ['get', 'id'], ['literal', selectedIds]],
             paint: {
               'line-color': '#f59e0b',
               'line-width': 3,
             },
-          });
+          }, beforeId);
+        } else {
+          map.setFilter('subzones-selected', ['in', ['get', 'id'], ['literal', selectedIds]]);
         }
 
           // Fit bounds once
@@ -265,14 +285,17 @@ export function MapContainer({
           map.fitBounds([[bounds[0], bounds[1]], [bounds[2], bounds[3]]], { padding: 50, duration: 0 });
         }
 
-        if (process.env.NODE_ENV === 'development') {
-          console.info('✅ GeoJSON ok:', {
-            features: geojson.features.length,
-            breaks: computeQuantiles(geojson.features),
-          });
-        }
+        // Update debug info
+        setDebugInfo({
+          featureCount: geojson.features.length,
+          breaks: breaks,
+          lastError: '',
+        });
+
+        console.info('[map] adding layers. fc:', geojson.features.length, 'breaks:', breaks);
       } catch (error) {
-        console.error('Failed to add layers:', error);
+        console.error('[map] init error:', error);
+        setDebugInfo(d => ({ ...d, lastError: String(error) }));
       }
     }
   }, [mapReady, geojson]);
@@ -389,6 +412,11 @@ export function MapContainer({
       }}
     >
       <BaseMap onReady={handleMapReady} />
+      <MapDebugPanel
+        featureCount={debugInfo.featureCount}
+        breaks={debugInfo.breaks}
+        lastError={debugInfo.lastError}
+      />
     </div>
   );
 }
