@@ -7,7 +7,7 @@
 "use client";
 
 import React, { useEffect, useState, Suspense } from 'react';
-import { SubzoneAPI, type FeatureCollection, type SubzoneListItem } from '@/services/subzones';
+import { SubzoneAPI, type FeatureCollection, type SubzoneListItem, type QuantilesResponse } from '@/services/subzones';
 import { apiGet } from '@/services/api';
 import { useSubzoneSelection } from '@/utils/hooks/useSubzoneSelection';
 import { useMapHoverFeature } from '@/utils/hooks/useMapHoverFeature';
@@ -19,7 +19,6 @@ import { PageErrorBoundary } from './components/PageErrorBoundary';
 import LoadingFallback from './components/LoadingFallback';
 import DiagBanner from './components/DiagBanner';
 import { DataStatusPanel } from './components/DataStatusPanel';
-import { computeQuantiles } from '@/utils/geojson/colorScales';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_API_BASE;
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
@@ -41,9 +40,39 @@ export function HomeMapScreen() {
   const [geoState, setGeoState] = useState<'loading' | 'ok' | 'fallback-ok' | 'geo-failed'>('loading');
   const [selectedSubzones, setSelectedSubzones] = useState<SubzoneListItem[]>([]);
   const [diagStatus, setDiagStatus] = useState<DiagStatus | null>(null);
+  const [quantiles, setQuantiles] = useState<QuantilesResponse | null>(null);
 
   const selection = useSubzoneSelection(2);
   const hover = useMapHoverFeature();
+
+  // Fetch quantiles from API (Part E)
+  useEffect(() => {
+    let mounted = true;
+
+    async function fetchQuantiles() {
+      try {
+        const data = await SubzoneAPI.getQuantiles(5);
+        if (mounted) {
+          setQuantiles(data);
+          if (process.env.NODE_ENV === 'development') {
+            console.info('📊 Quantiles fetched:', data);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch quantiles:', error);
+        // Set fallback empty breaks
+        if (mounted) {
+          setQuantiles({ k: 5, n: 0, min: 0, max: 0, breaks: [] });
+        }
+      }
+    }
+
+    fetchQuantiles();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   // Fetch diagnostics status
   useEffect(() => {
@@ -70,14 +99,17 @@ export function HomeMapScreen() {
     };
   }, []);
 
-  // Fetch GeoJSON with fallback strategy
+  // Fetch GeoJSON with fallback strategy (Part E: includes transit counts)
   useEffect(() => {
     let mounted = true;
 
     async function fetchGeoJSON() {
       try {
         setGeoState('loading');
-        const data = await SubzoneAPI.geo();
+        const data = await SubzoneAPI.geo({
+          fields: ['hawkerCount', 'mrtExitCount', 'busStopCount'],
+          simplify: 50, // Reduce coordinate count for performance
+        });
         if (mounted) {
           setGeojson(data);
           setGeoState('ok');
@@ -189,7 +221,8 @@ export function HomeMapScreen() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selection]);
 
-  const breaks = geojson ? computeQuantiles(geojson.features) : [0, 0, 0, 0, 0];
+  // Use quantiles from API (Part E)
+  const breaks = quantiles?.breaks || [];
 
   return (
     <div style={{ minHeight: '100vh', position: 'relative' }}>
