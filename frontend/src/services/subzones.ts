@@ -34,7 +34,7 @@ export type SubzoneDetail = SubzoneListItem & {
 };
 
 /**
- * GeoJSON Feature properties for map
+ * GeoJSON Feature properties for map (Part E: includes transit counts)
  */
 export type GeoFeatureProps = {
   id: string;
@@ -42,6 +42,9 @@ export type GeoFeatureProps = {
   region: string;
   populationTotal: number | null;
   populationYear: number | null;
+  hawkerCount?: number;
+  mrtExitCount?: number;
+  busStopCount?: number;
   missing?: string[];
 };
 
@@ -61,6 +64,17 @@ export type Feature = {
 export type FeatureCollection = {
   type: 'FeatureCollection';
   features: Feature[];
+};
+
+/**
+ * Quantiles response from Part E
+ */
+export type QuantilesResponse = {
+  k: number;
+  n: number;
+  min: number;
+  max: number;
+  breaks: number[];
 };
 
 /**
@@ -97,10 +111,27 @@ export const SubzoneAPI = {
 
   /**
    * Get GeoJSON FeatureCollection for map rendering
+   * PART E: Supports fields and simplify params
    */
-  geo: (region?: string): Promise<FeatureCollection> => {
-    const query = region ? `?region=${encodeURIComponent(region)}` : '';
-    return apiGet<FeatureCollection>(`/v1/geo/subzones${query}`);
+  geo: (options?: {
+    region?: string;
+    fields?: string[];
+    simplify?: number;
+  }): Promise<FeatureCollection> => {
+    const params = new URLSearchParams();
+    if (options?.region) params.set('region', options.region);
+    if (options?.fields) params.set('fields', options.fields.join(','));
+    if (options?.simplify) params.set('simplify', options.simplify.toString());
+    
+    const query = params.toString();
+    return apiGet<FeatureCollection>(`/v1/geo/subzones${query ? `?${query}` : ''}`);
+  },
+
+  /**
+   * Get population quantiles for choropleth rendering (Part E)
+   */
+  getQuantiles: async (k: number = 5): Promise<QuantilesResponse> => {
+    return apiGet<QuantilesResponse>(`/v1/stats/population-quantiles?k=${k}`);
   },
 
   /**

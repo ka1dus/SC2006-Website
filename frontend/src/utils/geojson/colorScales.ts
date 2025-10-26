@@ -54,6 +54,7 @@ export const SELECTED_COLOR = '#06b6d4'; // Neon cyan
 
 /**
  * Generate Mapbox expression for fill color based on population quantiles
+ * PART E: Uses API breaks [b0, b1, b2, b3] for 5 buckets
  */
 export function generateFillColorExpression(breaks: number[]): any[] {
   if (breaks.length === 0) {
@@ -65,13 +66,21 @@ export function generateFillColorExpression(breaks: number[]): any[] {
   // Handle missing data first
   expression.push(['==', ['get', 'populationTotal'], null], MISSING_DATA_COLOR);
 
-  // Add quantile steps
-  for (let i = 0; i < breaks.length; i++) {
-    expression.push(['<', ['get', 'populationTotal'], breaks[i]], POPULATION_COLORS[i]);
-  }
-
-  // Default to highest color
-  expression.push(POPULATION_COLORS[POPULATION_COLORS.length - 1]);
+  // PART E: Use breaks array directly [b0, b1, b2, b3] for 5 buckets
+  // Bucket 1: < b0 (lightest)
+  expression.push(['<', ['get', 'populationTotal'], breaks[0]], '#EFF6FF');
+  
+  // Bucket 2: b0 <= value < b1
+  expression.push(['<', ['get', 'populationTotal'], breaks[1]], '#BFDBFE');
+  
+  // Bucket 3: b1 <= value < b2
+  expression.push(['<', ['get', 'populationTotal'], breaks[2]], '#93C5FD');
+  
+  // Bucket 4: b2 <= value < b3
+  expression.push(['<', ['get', 'populationTotal'], breaks[3]], '#60A5FA');
+  
+  // Bucket 5: >= b3 (darkest)
+  expression.push('#3B82F6');
 
   return expression;
 }
@@ -85,36 +94,48 @@ export function formatPopulation(value: number | null): string {
 }
 
 /**
- * Get legend items for display
+ * Get legend items for display (Part E: uses API breaks)
  */
 export function getLegendItems(breaks: number[]): Array<{ color: string; label: string }> {
   if (breaks.length === 0) {
     return [
-      { color: POPULATION_COLORS[2], label: 'Population' },
+      { color: '#3B82F6', label: 'Population' },
       { color: MISSING_DATA_COLOR, label: 'No data' },
     ];
   }
 
+  // PART E: 5 color buckets from breaks array [b0, b1, b2, b3]
+  const colors = ['#EFF6FF', '#BFDBFE', '#93C5FD', '#60A5FA', '#3B82F6'];
   const items: Array<{ color: string; label: string }> = [];
 
-  // First bucket
+  // Bucket 1: < b0
   items.push({
-    color: POPULATION_COLORS[0],
+    color: colors[0],
     label: `< ${formatPopulation(breaks[0])}`,
   });
 
-  // Middle buckets
-  for (let i = 0; i < breaks.length - 1; i++) {
-    items.push({
-      color: POPULATION_COLORS[i + 1],
-      label: `${formatPopulation(breaks[i])} - ${formatPopulation(breaks[i + 1])}`,
-    });
-  }
-
-  // Last bucket
+  // Bucket 2: b0 to b1
   items.push({
-    color: POPULATION_COLORS[POPULATION_COLORS.length - 1],
-    label: `> ${formatPopulation(breaks[breaks.length - 1])}`,
+    color: colors[1],
+    label: `${formatPopulation(breaks[0])} - ${formatPopulation(breaks[1])}`,
+  });
+
+  // Bucket 3: b1 to b2
+  items.push({
+    color: colors[2],
+    label: `${formatPopulation(breaks[1])} - ${formatPopulation(breaks[2])}`,
+  });
+
+  // Bucket 4: b2 to b3
+  items.push({
+    color: colors[3],
+    label: `${formatPopulation(breaks[2])} - ${formatPopulation(breaks[3])}`,
+  });
+
+  // Bucket 5: >= b3
+  items.push({
+    color: colors[4],
+    label: `> ${formatPopulation(breaks[3])}`,
   });
 
   // Missing data
