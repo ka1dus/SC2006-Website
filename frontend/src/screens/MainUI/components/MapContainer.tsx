@@ -319,13 +319,15 @@ export function MapContainer({
 
   // Handle mouse events (only after layers are added)
   useEffect(() => {
-    if (!mapRef.current || !mapReady) return;
+    if (!mapRef.current || !mapReady || !geojson) return;
 
     const map = mapRef.current as any;
 
     // Don't set up mouse handlers if layers don't exist yet
     if (!map.getLayer('subzones-fill')) {
-      console.warn('[map] Mouse handlers skipped: layers not ready yet');
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('[map] Mouse handlers skipped: layers not ready yet');
+      }
       return;
     }
 
@@ -408,7 +410,7 @@ export function MapContainer({
         tooltipRef.current = null;
       }
     };
-  }, [mapReady, onFeatureClick, onFeatureHover]);
+  }, [mapReady, geojson, onFeatureClick, onFeatureHover]);
 
   return (
     <div
