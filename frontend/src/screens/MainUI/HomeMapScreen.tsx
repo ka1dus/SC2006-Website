@@ -14,12 +14,14 @@ import { useMapHoverFeature } from '@/utils/hooks/useMapHoverFeature';
 import { MapContainer } from './components/MapContainer';
 import { MapLegend } from './components/MapLegend';
 import { SelectionTray } from './components/SelectionTray';
+import { ComparePanel } from './components/ComparePanel';
 import { ClearAllButton } from './components/ClearAllButton';
 import { PageErrorBoundary } from './components/PageErrorBoundary';
 import LoadingFallback from './components/LoadingFallback';
 import DiagBanner from './components/DiagBanner';
 import { DataStatusPanel } from './components/DataStatusPanel';
 import { bucketIndex } from '@/utils/geojson/colorScales';
+import { useRouter } from 'next/router';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_API_BASE;
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
@@ -45,6 +47,7 @@ export function HomeMapScreen() {
 
   const selection = useSubzoneSelection(2);
   const hover = useMapHoverFeature();
+  const router = useRouter();
 
   // Fetch quantiles from API (Part E)
   useEffect(() => {
@@ -404,16 +407,20 @@ export function HomeMapScreen() {
 
                 <MapLegend breaks={breaks} />
 
-                {selection.count > 0 && (
-                  <>
-                    <ClearAllButton onClick={selection.clear} disabled={selection.count === 0} />
-                    <SelectionTray
-                      selectedSubzones={selectedSubzones}
-                      onRemove={selection.remove}
-                      maxSelections={2}
-                    />
-                  </>
+                {/* Task H: Compare Panel when 1-2 subzones selected */}
+                {selection.count >= 1 && geojson && (
+                  <ComparePanel
+                    selectedIds={selection.selected}
+                    geojson={geojson}
+                    onClearAll={() => {
+                      selection.clear();
+                      router.push('/?ids=');
+                    }}
+                  />
                 )}
+
+                {/* Legacy selection tray (hidden when ComparePanel is shown) */}
+                {selection.count === 0 && null}
               </div>
             )}
           </div>
