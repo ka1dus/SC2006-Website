@@ -97,7 +97,6 @@ export function MapContainer({
   const tooltipRef = useRef<HTMLDivElement | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [provider, setProvider] = useState<MapProvider>('mapbox');
-  const layersAddedRef = useRef(false);
 
   // Task I: Handle zoom to feature
   useEffect(() => {
@@ -157,101 +156,130 @@ export function MapContainer({
     }
   }, []);
 
-  // Add GeoJSON source and layers (ONCE after map is ready)
+  // Task: Idempotent source and layer initialization
   useEffect(() => {
-    if (!mapRef.current || !mapReady || layersAddedRef.current) return;
+    if (!mapRef.current || !mapReady) return;
 
     const map = mapRef.current as any;
 
-    try {
-      // Compute quantiles for color scale
-      const breaks = computeQuantiles(geojson.features);
-      const fillColorExpression = generateFillColorExpression(breaks);
+    // Wait for map load event
+    if (!map.loaded()) {
+      const onLoad = () => {
+        initializeLayers();
+      };
+      map.once('load', onLoad);
+      return () => {
+        map.off('load', onLoad);
+      };
+    } else {
+      initializeLayers();
+    }
 
-      if (process.env.NODE_ENV === 'development') {
-        console.info('🎨 Computed quantiles:', breaks);
-      }
+    function initializeLayers() {
+      try {
+        // Compute quantiles for color scale
+        const breaks = computeQuantiles(geojson.features);
+        const fillColorExpression = generateFillColorExpression(breaks);
 
-      // Add source with promoteId
-      map.addSource('subzones', {
-        type: 'geojson',
-        data: geojson,
-        promoteId: 'id',
-      });
+        if (process.env.NODE_ENV === 'development') {
+          console.info('🎨 Computed quantiles:', breaks);
+        }
 
-      // Add fill layer
-      map.addLayer({
-        id: 'subzones-fill',
-        type: 'fill',
-        source: 'subzones',
-        paint: {
-          'fill-color': fillColorExpression,
-          'fill-opacity': 0.7,
-        },
-      });
+        const srcId = 'subzones';
+        
+        // Idempotent: Add or update source
+        if (!map.getSource(srcId)) {
+          map.addSource(srcId, {
+            type: 'geojson',
+            data: geojson,
+            promoteId: 'id',
+          });
+        } else {
+          (map.getSource(srcId) as any).setData(geojson);
+        }
 
-      // Add outline layer
-      map.addLayer({
-        id: 'subzones-outline',
-        type: 'line',
-        source: 'subzones',
-        paint: {
-          'line-color': '#60a5fa',
-          'line-width': 1,
-        },
-      });
+        // Idempotent: Add fill layer
+        if (!map.getLayer('subzones-fill')) {
+          map.addLayer({
+            id: 'subzones-fill',
+            type: 'fill',
+            source: srcId,
+            paint: {
+              'fill-color': fillColorExpression,
+              'fill-opacity': 0.7,
+            },
+          });
+        }
 
-      // Add selected highlight layer
-      map.addLayer({
-        id: 'subzones-selected',
-        type: 'line',
-        source: 'subzones',
-        filter: ['in', ['get', 'id'], ['literal', []]],
-        paint: {
-          'line-color': '#f59e0b',
-          'line-width': 3,
-        },
-      });
+        // Idempotent: Add outline layer
+        if (!map.getLayer('subzones-outline')) {
+          map.addLayer({
+            id: 'subzones-outline',
+            type: 'line',
+            source: srcId,
+            paint: {
+              'line-color': '#60a5fa',
+              'line-width': 1,
+            },
+          });
+        }
 
-      layersAddedRef.current = true;
+        // Idempotent: Add selected highlight layer
+        if (!map.getLayer('subzones-selected')) {
+          map.addLayer({
+            id: 'subzones-selected',
+            type: 'line',
+            source: srcId,
+            filter: ['in', ['get', 'id'], ['literal', []]],
+            paint: {
+              'line-color': '#f59e0b',
+              'line-width': 3,
+            },
+          });
+        }
 
-      // Fit bounds
-      if (geojson.features.length > 0) {
-        const bounds: any = [Infinity, Infinity, -Infinity, -Infinity];
-        geojson.features.forEach((feature) => {
-          if (feature.geometry.type === 'Polygon') {
-            feature.geometry.coordinates[0].forEach((coord: number[]) => {
-              bounds[0] = Math.min(bounds[0], coord[0]);
-              bounds[1] = Math.min(bounds[1], coord[1]);
-              bounds[2] = Math.max(bounds[2], coord[0]);
-              bounds[3] = Math.max(bounds[3], coord[1]);
-            });
-          } else if (feature.geometry.type === 'MultiPolygon') {
-            feature.geometry.coordinates.forEach((polygon: number[][][]) => {
-              polygon[0].forEach((coord: number[]) => {
+          // Fit bounds once
+        if (!(window as any).__fitOnce) {
+          (window as any).__fitOnce = true;
+          const bounds: any = [Infinity, Infinity, -Infinity, -Infinity];
+          geojson.features.forEach((feature) => {
+            if (feature.geometry.type === 'Polygon') {
+              feature.geometry.coordinates[0].forEach((coord: number[]) => {
                 bounds[0] = Math.min(bounds[0], coord[0]);
                 bounds[1] = Math.min(bounds[1], coord[1]);
                 bounds[2] = Math.max(bounds[2], coord[0]);
                 bounds[3] = Math.max(bounds[3], coord[1]);
               });
-            });
-          }
-        });
+            } else if (feature.geometry.type === 'MultiPolygon') {
+              feature.geometry.coordinates.forEach((polygon: number[][][]) => {
+                polygon[0].forEach((coord: number[]) => {
+                  bounds[0] = Math.min(bounds[0], coord[0]);
+                  bounds[1] = Math.min(bounds[1], coord[1]);
+                  bounds[2] = Math.max(bounds[2], coord[0]);
+                  bounds[3] = Math.max(bounds[3], coord[1]);
+                });
+              });
+            }
+          });
 
-        map.fitBounds([[bounds[0], bounds[1]], [bounds[2], bounds[3]]], { padding: 50, duration: 1000 });
-      }
+          map.fitBounds([[bounds[0], bounds[1]], [bounds[2], bounds[3]]], { padding: 50, duration: 0 });
+        }
 
-      if (process.env.NODE_ENV === 'development') {
-        console.info('✅ Layers added:', ['subzones-fill', 'subzones-outline', 'subzones-selected']);
+        if (process.env.NODE_ENV === 'development') {
+          console.info('✅ GeoJSON ok:', {
+            features: geojson.features.length,
+            breaks: computeQuantiles(geojson.features),
+          });
+        }
+      } catch (error) {
+        console.error('Failed to add layers:', error);
       }
-    } catch (error) {
-      console.error('Failed to add layers:', error);
     }
   }, [mapReady, geojson]);
 
   // Update selection filter
   useEffect(() => {
-    if (!mapRef.current || !layersAddedRef.current) return;
+    if (!mapRef.current || !mapReady) return;
 
     const map = mapRef.current as any;
 

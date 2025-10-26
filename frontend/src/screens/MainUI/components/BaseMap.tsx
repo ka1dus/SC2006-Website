@@ -113,7 +113,10 @@ export default function BaseMap({ onReady }: BaseMapProps) {
     }
   }, []); // Only run once on mount
 
-  if (mapError) {
+  // Task: Don't show error panel when using MapLibre
+  const shouldShowError = mapError && provider !== 'maplibre';
+
+  if (shouldShowError) {
     return (
       <div
         style={{
@@ -146,8 +149,8 @@ export default function BaseMap({ onReady }: BaseMapProps) {
             <div>💡 To fix:</div>
             <div>1. Add valid Mapbox token to .env.local:</div>
             <div style={{ marginLeft: 16 }}>NEXT_PUBLIC_MAPBOX_TOKEN=pk.your_token_here</div>
-            <div>2. Restart Next.js dev server</div>
-            <div>3. Required scopes: styles:read, tiles:read, fonts:read, sprites:read</div>
+            <div>2. Or set NEXT_PUBLIC_USE_MAPLIBRE=1 to force MapLibre</div>
+            <div>3. Restart Next.js dev server</div>
           </div>
         </div>
       </div>
