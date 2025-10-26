@@ -317,11 +317,17 @@ export function MapContainer({
     }
   }, [selectedIds]);
 
-  // Handle mouse events
+  // Handle mouse events (only after layers are added)
   useEffect(() => {
     if (!mapRef.current || !mapReady) return;
 
     const map = mapRef.current as any;
+
+    // Don't set up mouse handlers if layers don't exist yet
+    if (!map.getLayer('subzones-fill')) {
+      console.warn('[map] Mouse handlers skipped: layers not ready yet');
+      return;
+    }
 
     const handleMouseMove = (e: any) => {
       const features = map.queryRenderedFeatures(e.point, {
