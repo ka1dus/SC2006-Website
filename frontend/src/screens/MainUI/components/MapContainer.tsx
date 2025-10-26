@@ -153,7 +153,7 @@ export function MapContainer({
     
     if (process.env.NODE_ENV === 'development') {
       if (validation.valid) {
-        console.info('✅ GeoJSON validated OK:', validation.stats);
+        console.info('[geo] validated OK:', validation.stats);
       } else {
         console.error('❌ GeoJSON validation failed:', validation.errors);
       }
@@ -165,6 +165,13 @@ export function MapContainer({
     mapRef.current = map;
     setProvider(mapProvider);
     setMapReady(true);
+
+    // Mark layers as ready when map loads
+    map.once('load', () => {
+      if (process.env.NODE_ENV === 'development') {
+        console.info('[map] load ready');
+      }
+    });
 
     if (process.env.NODE_ENV === 'development') {
       console.info(`🗺️ Map ready with ${mapProvider} provider`);
@@ -297,6 +304,14 @@ export function MapContainer({
 
         console.info('[map] adding layers. fc:', geojson.features.length, 'breaks:', breaks);
         
+        // Log layer status
+        console.log('[layers] upsert complete:', {
+          src: map.getSource('subzones') ? 'exists' : 'missing',
+          fill: map.getLayer('subzones-fill') ? 'exists' : 'missing',
+          outline: map.getLayer('subzones-outline') ? 'exists' : 'missing',
+          selected: map.getLayer('subzones-selected') ? 'exists' : 'missing',
+        });
+        
         // Mark layers as ready after adding them
         setLayersReady(true);
       } catch (error) {
@@ -304,7 +319,7 @@ export function MapContainer({
         setDebugInfo(d => ({ ...d, lastError: String(error) }));
       }
     }
-  }, [mapReady, geojson, apiBreaks]);
+  }, [mapReady, geojson, apiBreaks, selectedIds]);
 
   // Update selection filter
   useEffect(() => {

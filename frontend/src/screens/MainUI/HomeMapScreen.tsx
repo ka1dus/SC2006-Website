@@ -64,9 +64,7 @@ export function HomeMapScreen() {
         const data = await SubzoneAPI.getQuantiles(5);
         if (mounted) {
           setQuantiles(data);
-          if (process.env.NODE_ENV === 'development') {
-            console.info('📊 Quantiles fetched:', data);
-          }
+          console.info('[geo] quantiles fetched:', data.breaks);
         }
       } catch (error) {
         console.error('Failed to fetch quantiles:', error);
@@ -93,9 +91,7 @@ export function HomeMapScreen() {
         const status = await apiGet<DiagStatus>('/v1/diag/status');
         if (mounted) {
           setDiagStatus(status);
-          if (process.env.NODE_ENV === 'development') {
-            console.info('📊 System status:', status);
-          }
+          console.info('[health] subzones:', status.subzones, 'populations:', status.populations);
         }
       } catch (error) {
         console.error('Failed to fetch diag status:', error);
@@ -126,39 +122,7 @@ export function HomeMapScreen() {
         if (mounted) {
           setGeojson(data);
           setGeoState('ok');
-          
-          // Log diagnostics in dev mode
-          if (process.env.NODE_ENV === 'development') {
-            const bbox = data.features.length > 0
-              ? [
-                  Math.min(...data.features.flatMap(f => 
-                    f.geometry.type === 'Polygon' 
-                      ? f.geometry.coordinates[0].map((c: number[]) => c[0])
-                      : f.geometry.coordinates.flatMap((p: number[][][]) => p[0].map((c: number[]) => c[0]))
-                  )),
-                  Math.min(...data.features.flatMap(f => 
-                    f.geometry.type === 'Polygon' 
-                      ? f.geometry.coordinates[0].map((c: number[]) => c[1])
-                      : f.geometry.coordinates.flatMap((p: number[][][]) => p[0].map((c: number[]) => c[1]))
-                  )),
-                  Math.max(...data.features.flatMap(f => 
-                    f.geometry.type === 'Polygon' 
-                      ? f.geometry.coordinates[0].map((c: number[]) => c[0])
-                      : f.geometry.coordinates.flatMap((p: number[][][]) => p[0].map((c: number[]) => c[0]))
-                  )),
-                  Math.max(...data.features.flatMap(f => 
-                    f.geometry.type === 'Polygon' 
-                      ? f.geometry.coordinates[0].map((c: number[]) => c[1])
-                      : f.geometry.coordinates.flatMap((p: number[][][]) => p[0].map((c: number[]) => c[1]))
-                  )),
-                ]
-              : null;
-            
-            console.info('✅ GeoJSON OK:', {
-              count: data.features.length,
-              bbox,
-            });
-          }
+          console.info('[geo] loaded', data.features.length, 'features');
         }
       } catch (primaryErr) {
         console.warn('Primary GeoJSON failed, trying fallback:', primaryErr);
