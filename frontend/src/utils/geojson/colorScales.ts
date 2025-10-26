@@ -93,8 +93,8 @@ export function generateFillColorExpression(breaks: number[]): any[] {
 /**
  * Format population number with commas
  */
-export function formatPopulation(value: number | null): string {
-  if (value === null) return '—';
+export function formatPopulation(value: number | null | undefined): string {
+  if (value === null || value === undefined) return '—';
   return value.toLocaleString();
 }
 
