@@ -165,12 +165,24 @@ export async function enrichWithPopulation(
         missing.push('population');
       }
 
+      // Ensure population is always number or null (never string or undefined)
+      const popTotal = population?.total;
+      const popYear = population?.year;
+      
+      const populationTotal = popTotal !== null && popTotal !== undefined 
+        ? (typeof popTotal === 'number' ? popTotal : (Number.isFinite(Number(popTotal)) ? Number(popTotal) : null))
+        : null;
+        
+      const populationYear = popYear !== null && popYear !== undefined
+        ? (typeof popYear === 'number' ? popYear : (Number.isFinite(Number(popYear)) ? Number(popYear) : null))
+        : null;
+
       const enrichedProperties: any = {
         id: feature.properties.id,
         name: feature.properties.name,
         region: feature.properties.region as Region,
-        populationTotal: population?.total ?? null,
-        populationYear: population?.year ?? null,
+        populationTotal, // guaranteed number or null
+        populationYear,  // guaranteed number or null
         hawkerCount: hawkerCountMap.get(subzoneId) ?? 0,      // P2
         mrtExitCount: mrtCountMap.get(subzoneId) ?? 0,        // P3
         busStopCount: busCountMap.get(subzoneId) ?? 0,        // P3

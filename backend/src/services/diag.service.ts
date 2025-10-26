@@ -13,7 +13,7 @@ export interface GeoHealth {
   polygons: number;
   withPopulation: number;
   nullPopulation: number;
-  sample: Array<{ id: string; populationTotal: number | null }>;
+  samples: Array<{ id: string; populationTotal: number | null; populationYear: number | null }>;
 }
 
 export interface DiagStatus {
@@ -293,7 +293,8 @@ export async function getGeoHealth(): Promise<GeoHealth> {
     let polygons = 0;
     let withPopulation = 0;
     let nullPopulation = 0;
-    const sample: Array<{ id: string; populationTotal: number | null }> = [];
+    const samples: Array<{ id: string; populationTotal: number | null; populationYear: number | null }> = [];
+    const nullSamples: Array<{ id: string; populationTotal: number | null; populationYear: number | null }> = [];
 
     enriched.features.forEach((f) => {
       if (f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon') {
@@ -301,18 +302,30 @@ export async function getGeoHealth(): Promise<GeoHealth> {
       }
 
       const pop = f.properties?.populationTotal;
+      const year = f.properties?.populationYear;
+      
       if (pop !== null && pop !== undefined && typeof pop === 'number') {
         withPopulation++;
+        
+        // Collect first 3 populated samples
+        if (samples.length < 3 && f.properties?.id) {
+          samples.push({
+            id: f.properties.id,
+            populationTotal: pop,
+            populationYear: typeof year === 'number' ? year : null,
+          });
+        }
       } else {
         nullPopulation++;
-      }
-
-      // Collect sample (first 4 features)
-      if (sample.length < 4 && f.properties?.id) {
-        sample.push({
-          id: f.properties.id,
-          populationTotal: typeof pop === 'number' ? pop : null,
-        });
+        
+        // Collect first 3 null samples
+        if (nullSamples.length < 3 && f.properties?.id) {
+          nullSamples.push({
+            id: f.properties.id,
+            populationTotal: null,
+            populationYear: null,
+          });
+        }
       }
     });
 
@@ -321,7 +334,7 @@ export async function getGeoHealth(): Promise<GeoHealth> {
       polygons,
       withPopulation,
       nullPopulation,
-      sample,
+      samples: [...samples, ...nullSamples].slice(0, 6),
     };
   } catch (error) {
     console.error('[diag] geo health error:', error);
