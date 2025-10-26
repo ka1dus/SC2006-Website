@@ -48,6 +48,9 @@ export async function loadBaseGeoJSON(): Promise<GeoJSONFeatureCollection | null
           // Will be enriched later
           populationTotal: null as number | null,
           populationYear: null as number | null,
+          hawkerCount: 0,
+          mrtExitCount: 0,
+          busStopCount: 0,
         },
         geometry: subzone.geomGeoJSON as any,
       }));
@@ -66,6 +69,17 @@ export async function loadBaseGeoJSON(): Promise<GeoJSONFeatureCollection | null
     if (geojson.type !== 'FeatureCollection') {
       throw new Error('Fallback GeoJSON is not a FeatureCollection');
     }
+
+    // Add default transit count fields to fallback GeoJSON features
+    geojson.features = geojson.features.map((f: any) => ({
+      ...f,
+      properties: {
+        ...f.properties,
+        hawkerCount: f.properties.hawkerCount ?? 0,
+        mrtExitCount: f.properties.mrtExitCount ?? 0,
+        busStopCount: f.properties.busStopCount ?? 0,
+      },
+    }));
 
     return geojson;
   } catch (error) {
@@ -103,15 +117,15 @@ export async function enrichWithPopulation(
 
   // Create count maps
   const hawkerCountMap = new Map(
-    hawkerCounts.map(h => [h.subzoneId, h._count.id]).filter(([id]) => id !== null)
+    hawkerCounts.map(h => [h.subzoneId, h._count.id] as [string, number]).filter(([id]) => id !== null)
   );
 
   const mrtCountMap = new Map(
-    mrtCounts.map(m => [m.subzoneId, m._count.id]).filter(([id]) => id !== null)
+    mrtCounts.map(m => [m.subzoneId, m._count.id] as [string, number]).filter(([id]) => id !== null)
   );
 
   const busCountMap = new Map(
-    busCounts.map(b => [b.subzoneId, b._count.id]).filter(([id]) => id !== null)
+    busCounts.map(b => [b.subzoneId, b._count.id] as [string, number]).filter(([id]) => id !== null)
   );
 
   // Enrich each feature

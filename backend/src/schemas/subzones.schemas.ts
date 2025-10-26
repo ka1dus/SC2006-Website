@@ -127,6 +127,9 @@ export const FeaturePropertiesSchema = z.object({
   region: z.nativeEnum(Region),
   populationTotal: z.number().int().nonnegative().nullable(),
   populationYear: z.number().int().nullable(),
+  hawkerCount: z.number().int().nonnegative().default(0),
+  mrtExitCount: z.number().int().nonnegative().default(0),
+  busStopCount: z.number().int().nonnegative().default(0),
   missing: z.array(z.literal('population')).optional(),
 });
 
