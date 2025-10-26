@@ -5,7 +5,7 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
-import { getSystemStatus } from '../services/diag.service';
+import { getSystemStatus, getGeoHealth } from '../services/diag.service';
 
 /**
  * GET /api/v1/diag/status
@@ -45,6 +45,21 @@ export async function getReadyHandler(req: Request, res: Response, next: NextFun
       timestamp: new Date().toISOString(),
     });
     return;
+  }
+}
+
+/**
+ * GET /api/v1/diag/geo-health
+ * Part C: Returns GeoJSON health with population status
+ */
+export async function getGeoHealthHandler(req: Request, res: Response, next: NextFunction) {
+  try {
+    const health = await getGeoHealth();
+    
+    res.status(200).json(health);
+    return;
+  } catch (error) {
+    next(error);
   }
 }
 

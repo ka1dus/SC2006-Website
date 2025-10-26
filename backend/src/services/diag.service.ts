@@ -8,6 +8,14 @@ import prisma from '../db';
 import { loadBaseGeoJSON, enrichWithPopulation } from './geo/geojson.service';
 import type { GeoJSONFeatureCollection } from '../schemas/subzones.schemas';
 
+export interface GeoHealth {
+  features: number;
+  polygons: number;
+  withPopulation: number;
+  nullPopulation: number;
+  sample: Array<{ id: string; populationTotal: number | null }>;
+}
+
 export interface DiagStatus {
   tables: {
     subzones: number;
@@ -271,5 +279,53 @@ export async function getSystemStatus(): Promise<DiagStatus> {
     busStops: busCount,
     geo: geoStatus,
   };
+}
+
+/**
+ * Get GeoJSON health status (Part C)
+ * Returns counts and samples for population data
+ */
+export async function getGeoHealth(): Promise<GeoHealth> {
+  try {
+    const fc = await loadBaseGeoJSON();
+    const enriched = await enrichWithPopulation(fc);
+
+    let polygons = 0;
+    let withPopulation = 0;
+    let nullPopulation = 0;
+    const sample: Array<{ id: string; populationTotal: number | null }> = [];
+
+    enriched.features.forEach((f) => {
+      if (f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon') {
+        polygons++;
+      }
+
+      const pop = f.properties?.populationTotal;
+      if (pop !== null && pop !== undefined && typeof pop === 'number') {
+        withPopulation++;
+      } else {
+        nullPopulation++;
+      }
+
+      // Collect sample (first 4 features)
+      if (sample.length < 4 && f.properties?.id) {
+        sample.push({
+          id: f.properties.id,
+          populationTotal: typeof pop === 'number' ? pop : null,
+        });
+      }
+    });
+
+    return {
+      features: enriched.features.length,
+      polygons,
+      withPopulation,
+      nullPopulation,
+      sample,
+    };
+  } catch (error) {
+    console.error('[diag] geo health error:', error);
+    throw error;
+  }
 }
 
