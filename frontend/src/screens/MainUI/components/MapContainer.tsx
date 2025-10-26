@@ -294,7 +294,7 @@ export function MapContainer({
 
   // Handle mouse events
   useEffect(() => {
-    if (!mapRef.current || !layersAddedRef.current) return;
+    if (!mapRef.current || !mapReady) return;
 
     const map = mapRef.current as any;
 
@@ -377,7 +377,7 @@ export function MapContainer({
         tooltipRef.current = null;
       }
     };
-  }, [mapReady, layersAddedRef.current, onFeatureClick, onFeatureHover]);
+  }, [mapReady, onFeatureClick, onFeatureHover]);
 
   return (
     <div
