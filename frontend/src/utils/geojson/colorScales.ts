@@ -61,26 +61,31 @@ export function generateFillColorExpression(breaks: number[]): any[] {
     return ['case', ['==', ['get', 'populationTotal'], null], MISSING_DATA_COLOR, POPULATION_COLORS[2]];
   }
 
-  const expression: any[] = ['case'];
+  // Helper: coerce populationTotal to number, defaulting to -999999 for missing data
+  const popNum = ['coalesce', ['to-number', ['get', 'populationTotal']], -999999];
 
-  // Handle missing data first
-  expression.push(['==', ['get', 'populationTotal'], null], MISSING_DATA_COLOR);
-
-  // PART E: Use breaks array directly [b0, b1, b2, b3] for 5 buckets
-  // Bucket 1: < b0 (lightest)
-  expression.push(['<', ['get', 'populationTotal'], breaks[0]], '#EFF6FF');
+  const [b0, b1, b2, b3] = breaks;
   
-  // Bucket 2: b0 <= value < b1
-  expression.push(['<', ['get', 'populationTotal'], breaks[1]], '#BFDBFE');
-  
-  // Bucket 3: b1 <= value < b2
-  expression.push(['<', ['get', 'populationTotal'], breaks[2]], '#93C5FD');
-  
-  // Bucket 4: b2 <= value < b3
-  expression.push(['<', ['get', 'populationTotal'], breaks[3]], '#60A5FA');
-  
-  // Bucket 5: >= b3 (darkest)
-  expression.push('#3B82F6');
+  const expression: any[] = [
+    'case',
+    // No data -> light gray
+    ['==', popNum, -999999], '#E5E7EB',
+    
+    // Bucket 1: < b0 (lightest)
+    ['<', popNum, b0 ?? 0], '#EFF6FF',
+    
+    // Bucket 2: b0 <= value < b1
+    ['<', popNum, b1 ?? (b0 ?? 0)], '#BFDBFE',
+    
+    // Bucket 3: b1 <= value < b2
+    ['<', popNum, b2 ?? (b1 ?? 0)], '#93C5FD',
+    
+    // Bucket 4: b2 <= value < b3
+    ['<', popNum, b3 ?? (b2 ?? 0)], '#60A5FA',
+    
+    // Bucket 5: >= b3 (darkest)
+    '#3B82F6'
+  ];
 
   return expression;
 }
