@@ -91,7 +91,7 @@ export async function enrichWithPopulation(
     _count: { id: true },
   });
 
-  const mrtCounts = await prisma.mRTStation.groupBy({
+  const mrtCounts = await prisma.mRTExit.groupBy({
     by: ['subzoneId'],
     _count: { id: true },
   });

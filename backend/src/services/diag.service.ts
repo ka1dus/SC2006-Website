@@ -12,6 +12,9 @@ export interface DiagStatus {
   tables: {
     subzones: number;
     population: number;
+    hawkerCentres: number;
+    mrtExits: number;
+    busStops: number;
   };
   snapshots: {
     uraSubzones?: {
@@ -19,6 +22,18 @@ export interface DiagStatus {
       status: string;
     };
     population?: {
+      finishedAt: Date | null;
+      status: string;
+    };
+    hawker?: {
+      finishedAt: Date | null;
+      status: string;
+    };
+    mrt?: {
+      finishedAt: Date | null;
+      status: string;
+    };
+    bus?: {
       finishedAt: Date | null;
       status: string;
     };
@@ -34,13 +49,30 @@ export interface DiagStatus {
       year: number;
       total: number;
     };
+    hawker?: {
+      id: string;
+      name: string;
+      subzoneId: string | null;
+    };
+    mrt?: {
+      id: string;
+      station: string | null;
+      code: string | null;
+      subzoneId: string | null;
+    };
+    bus?: {
+      id: string;
+      name: string | null;
+      road: string | null;
+      subzoneId: string | null;
+    };
   };
   // Legacy fields (kept for backward compatibility)
   subzones: number;
   populations: number;
   unmatched: number;
   hawkerCentres: number;
-  mrtStations: number;
+  mrtExits: number;
   busStops: number;
   geo: {
     ok: boolean;
@@ -68,7 +100,7 @@ export async function getSystemStatus(): Promise<DiagStatus> {
     prisma.population.count(),
     prisma.populationUnmatched.count(),
     prisma.hawkerCentre.count(),
-    prisma.mRTStation.count(),
+    prisma.mRTExit.count(),
     prisma.busStop.count(),
   ]);
 
@@ -91,6 +123,18 @@ export async function getSystemStatus(): Promise<DiagStatus> {
     select: { finishedAt: true, status: true },
   });
 
+  const mrtSnapshot = await prisma.datasetSnapshot.findFirst({
+    where: { kind: 'mrt-exits' },
+    orderBy: { finishedAt: 'desc' },
+    select: { finishedAt: true, status: true },
+  });
+
+  const busSnapshot = await prisma.datasetSnapshot.findFirst({
+    where: { kind: 'bus-stops' },
+    orderBy: { finishedAt: 'desc' },
+    select: { finishedAt: true, status: true },
+  });
+
   // Get sample records
   const sampleSubzone = await prisma.subzone.findFirst({
     select: { id: true, name: true, region: true },
@@ -102,6 +146,14 @@ export async function getSystemStatus(): Promise<DiagStatus> {
 
   const sampleHawker = await prisma.hawkerCentre.findFirst({
     select: { id: true, name: true, subzoneId: true },
+  });
+
+  const sampleMRT = await prisma.mRTExit.findFirst({
+    select: { id: true, station: true, code: true, subzoneId: true },
+  });
+
+  const sampleBus = await prisma.busStop.findFirst({
+    select: { id: true, name: true, road: true, subzoneId: true },
   });
 
   // Check GeoJSON availability
@@ -135,6 +187,9 @@ export async function getSystemStatus(): Promise<DiagStatus> {
     tables: {
       subzones: subzoneCount,
       population: populationCount,
+      hawkerCentres: hawkerCount,
+      mrtExits: mrtCount,
+      busStops: busCount,
     },
     snapshots: {
       ...(uraSnapshot && {
@@ -153,6 +208,18 @@ export async function getSystemStatus(): Promise<DiagStatus> {
         hawker: {
           finishedAt: hawkerSnapshot.finishedAt,
           status: hawkerSnapshot.status,
+        },
+      }),
+      ...(mrtSnapshot && {
+        mrt: {
+          finishedAt: mrtSnapshot.finishedAt,
+          status: mrtSnapshot.status,
+        },
+      }),
+      ...(busSnapshot && {
+        bus: {
+          finishedAt: busSnapshot.finishedAt,
+          status: busSnapshot.status,
         },
       }),
     },
@@ -178,13 +245,29 @@ export async function getSystemStatus(): Promise<DiagStatus> {
           subzoneId: sampleHawker.subzoneId,
         },
       }),
+      ...(sampleMRT && {
+        mrt: {
+          id: sampleMRT.id,
+          station: sampleMRT.station,
+          code: sampleMRT.code,
+          subzoneId: sampleMRT.subzoneId,
+        },
+      }),
+      ...(sampleBus && {
+        bus: {
+          id: sampleBus.id,
+          name: sampleBus.name,
+          road: sampleBus.road,
+          subzoneId: sampleBus.subzoneId,
+        },
+      }),
     },
     // Legacy fields (backward compatibility)
     subzones: subzoneCount,
     populations: populationCount,
     unmatched: unmatchedCount,
     hawkerCentres: hawkerCount,
-    mrtStations: mrtCount,
+    mrtExits: mrtCount,
     busStops: busCount,
     geo: geoStatus,
   };
