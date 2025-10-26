@@ -5,6 +5,7 @@
  */
 
 import booleanPointInPolygon from '@turf/boolean-point-in-polygon';
+import buffer from '@turf/buffer';
 import { point, polygon, multiPolygon } from '@turf/helpers';
 import prisma from '../../../db';
 
@@ -165,5 +166,72 @@ export function createPointGeometry(longitude: number, latitude: number): any {
     type: 'Point',
     coordinates: [longitude, latitude],
   };
+}
+
+/**
+ * Assign subzone to point with buffer support (Part D)
+ * @param lng Longitude
+ * @param lat Latitude
+ * @param polys Array of {id, geom} subzone polygons
+ * @returns subzoneId or null if not found
+ */
+export async function assignSubzoneWithBuffer(lng: number, lat: number): Promise<string | null> {
+  const pt = point([lng, lat]);
+  const geometries = await loadSubzoneGeometries();
+  
+  if (geometries.length === 0) {
+    console.warn('⚠️  No subzone geometries loaded. Cannot assign subzone.');
+    return null;
+  }
+
+  // First try exact point-in-polygon
+  for (const subzone of geometries) {
+    try {
+      let isInside = false;
+
+      if (subzone.geometry.type === 'Polygon') {
+        const poly = polygon(subzone.geometry.coordinates);
+        isInside = booleanPointInPolygon(pt, poly);
+      } else if (subzone.geometry.type === 'MultiPolygon') {
+        const mpoly = multiPolygon(subzone.geometry.coordinates);
+        isInside = booleanPointInPolygon(pt, mpoly);
+      }
+
+      if (isInside) {
+        return subzone.id;
+      }
+    } catch (error) {
+      // Continue to next subzone
+    }
+  }
+
+  // If not found, try with a small buffer (5 meters ≈ 0.005 km) to catch border points
+  try {
+    const pt5 = buffer(pt, 0.005, { units: 'kilometers' });
+    
+    for (const subzone of geometries) {
+      try {
+        let isInside = false;
+
+        if (subzone.geometry.type === 'Polygon') {
+          const poly = polygon(subzone.geometry.coordinates);
+          isInside = booleanPointInPolygon(pt5, poly);
+        } else if (subzone.geometry.type === 'MultiPolygon') {
+          const mpoly = multiPolygon(subzone.geometry.coordinates);
+          isInside = booleanPointInPolygon(pt5, mpoly);
+        }
+
+        if (isInside) {
+          return subzone.id;
+        }
+      } catch (error) {
+        // Continue to next subzone
+      }
+    }
+  } catch (error) {
+    // Buffer failed, return null
+  }
+
+  return null;
 }
 

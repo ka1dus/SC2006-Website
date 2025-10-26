@@ -18,6 +18,7 @@
     "ingest:hawker": "tsx src/services/ingest/hawker.nea.ts",
     "ingest:mrt": "tsx src/services/ingest/mrt.ts",
     "ingest:bus": "tsx src/services/ingest/busStops.ts",
+    "ingest:access": "npm run ingest:mrt && npm run ingest:bus",
     "ingest:all": "npm run ingest:subzones && npm run ingest:population && npm run ingest:hawker && npm run ingest:mrt && npm run ingest:bus",
     "test": "jest",
     "test:watch": "jest --watch"
@@ -25,6 +26,7 @@
   "dependencies": {
     "@prisma/client": "^5.7.1",
     "@turf/boolean-point-in-polygon": "^7.2.0",
+    "@turf/buffer": "^7.2.0",
     "@turf/helpers": "^7.2.0",
     "@types/proj4": "^2.5.6",
     "bcryptjs": "^2.4.3",

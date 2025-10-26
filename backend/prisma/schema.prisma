@@ -48,7 +48,7 @@ model Subzone {
 
   // Relations to point datasets (Task DATASET-AUDIT-AND-INGEST)
   hawkerCentres HawkerCentre[]
-  mrtStations   MRTStation[]
+  mrtExits      MRTExit[]
   busStops      BusStop[]
 
   // Relations to existing models
@@ -117,37 +117,34 @@ model HawkerCentre {
   @@map("hawker_centres")
 }
 
-// MRT Station Data (Task DATASET-AUDIT-AND-INGEST)
-// Note: This represents MRT station exits/entrances, not just stations
-model MRTStation {
-  id          String   @id @default(cuid())
-  stationId   String   @unique               // Composite key (e.g., "NS1-EXIT_A")
-  name        String                         // Station name (e.g., "Jurong East")
-  code        String?                        // Station code (e.g., "NS1", "EW24")
-  exitCode    String?                        // Exit identifier (e.g., "A", "B", "C")
-  location    Json                           // GeoJSON Point {type:"Point", coordinates:[lng,lat]}
-  subzoneId   String?                        // Assigned via point-in-polygon during ingest
+// Part D: MRT Exits (point features with subzone assignment)
+model MRTExit {
+  id          String   @id               // stable code or name+coord hash
+  station     String?  @db.VarChar(200)  // Station name (e.g., "Jurong East")
+  code        String?  @db.VarChar(50)   // Station/ex constructor (e.g., "NS1", "DT14", "Exit A")
+  location    Json                       // GeoJSON Point { type: "Point", coordinates: [lng, lat] }
+  subzoneId   String?                    // Assigned via point-in-polygon during ingest
   subzone     Subzone? @relation(fields: [subzoneId], references: [id], onDelete: SetNull)
+  
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-
+  
   @@index([subzoneId])
-  @@index([code])
-  @@map("mrt_stations")
+  @@map("mrt_exits")
 }
 
-// Bus Stop Data (Task DATASET-AUDIT-AND-INGEST)
+// Part D: Bus Stops (point features with subzone assignment)
 model BusStop {
-  id          String   @id @default(cuid())
-  stopCode    String   @unique               // LTA bus stop code (5 digits)
-  name        String?                        // Description/Road name
-  roadName    String?                        // From LTA: RoadName field
-  location    Json                           // GeoJSON Point {type:"Point", coordinates:[lng,lat]}
-  subzoneId   String?                        // Assigned via point-in-polygon during ingest
+  id          String   @id               // LTA bus stop code, or name+coord hash
+  name        String?  @db.VarChar(200)  // Bus stop name/description
+  road        String?  @db.VarChar(200)  // Road name (e.g., "Orchard Road")
+  location    Json                       // GeoJSON Point { type: "Point", coordinates: [lng, lat] }
+  subzoneId   String?                    // Assigned via point-in-polygon during ingest
   subzone     Subzone? @relation(fields: [subzoneId], references: [id], onDelete: SetNull)
+  
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-
+  
   @@index([subzoneId])
   @@map("bus_stops")
 }

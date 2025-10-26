@@ -1,188 +1,222 @@
 /**
- * MRT Station Exits Ingestion Service
- * Loads MRT station exit points and assigns subzoneId via point-in-polygon
+ * MRT Exits Ingestion Service (Part D)
+ * Loads MRT exit points with proper CRS handling and subzone assignment
  * 
  * Strategy:
- * 1. Try loading from local file (backend/data/mrt_station_exits.json)
- * 2. Fallback to fetching from URL (MRT_EXITS_URL env var)
- * 3. If both fail, show clear error message
+ * 1. Try MRT_EXITS_URL (data.gov.sg API)
+ * 2. Fallback to local file (backend/data/mrt_exits.geojson or .csv)
+ * 3. Handle both GeoJSON and CSV formats
+ * 4. Detect and convert SVY21 → WGS84 coordinates
+ * 5. Point-in-polygon assignment to subzones with buffer support
  * 
- * Task: DATASET-AUDIT-AND-INGEST P3
+ * Part D: Full dataset ingestion with stage-by-stage diagnostics
  */
 
 import prisma from '../../db';
-import { findSubzoneForPoint, createPointGeometry } from './utils/geo';
+import { assignSubzoneWithBuffer, createPointGeometry } from './utils/geo';
+import { detectCRS, ensureWGS84, CRS } from './utils/crs';
+import { stableMRTExitId } from './utils/id';
+import { parse } from "csv-parse/sync";
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
 const DATA_DIR = path.join(process.cwd(), 'data');
-const LOCAL_FILE_PATH = path.join(DATA_DIR, 'mrt_station_exits.json');
+const LOCAL_GEOJSON_PATH = path.join(DATA_DIR, 'mrt_exits.geojson');
+const LOCAL_CSV_PATH = path.join(DATA_DIR, 'mrt_exits.csv');
 const MRT_EXITS_URL = process.env.MRT_EXITS_URL || '';
 
 /**
- * Fetch MRT exits data (file-first, then URL)
+ * Parse HTML table in Description field to extract STATION_NA and EXIT_CODE
  */
-async function fetchMRTExits(): Promise<{ data: any[]; source: 'file' | 'url' } | null> {
-  // Strategy 1: Try local file
+function parseStationInfo(description: string): { station?: string; code?: string } {
+  if (!description) return {};
+
+  const stationMatch = /STATION_NA.*?<td>(.*?)<\/td>/i.exec(description);
+  const exitMatch = /EXIT_CODE.*?<td>(.*?)<\/td>/i.exec(description);
+  
+  const station = stationMatch ? stationMatch[1].trim() : undefined;
+  const code = exitMatch ? exitMatch[1].trim() : undefined;
+
+  return { station, code };
+}
+
+/**
+ * Fetch MRT exits data (URL-first, then local files)
+ */
+async function fetchMRTExits(): Promise<{ data: any[]; source: string } | null> {
+  // Strategy 1: Try URL
+  if (MRT_EXITS_URL) {
+    try {
+      console.log(`🌐 Fetching MRT exits from URL: ${MRT_EXITS_URL}`);
+      const response = await fetch(MRT_EXITS_URL);
+      
+      if (!response.ok) {
+        console.error(`❌ HTTP ${response.status}: ${response.statusText}`);
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      let records: any[] = [];
+      
+      // Handle data.gov.sg CKAN API format
+      if (data.result && data.result.records) {
+        records = data.result.records;
+        console.log(`✅ Fetched ${records.length} MRT exits from data.gov.sg API`);
+        return { data: records, source: 'data.gov.sg API' };
+      }
+      // Handle direct GeoJSON
+      else if (data.type === 'FeatureCollection' && data.features) {
+        records = data.features.map((f: any) => ({
+          ...f.properties,
+          geometry: f.geometry,
+        }));
+        console.log(`✅ Fetched ${records.length} MRT exits from GeoJSON URL`);
+        return { data: records, source: 'GeoJSON URL' };
+      }
+    } catch (error) {
+      console.error('❌ Failed to fetch MRT exits from URL:', error);
+    }
+  }
+
+  // Strategy 2: Try local GeoJSON file
   try {
-    console.log(`📂 Checking for local file: ${LOCAL_FILE_PATH}`);
-    const fileContent = await fs.readFile(LOCAL_FILE_PATH, 'utf-8');
+    console.log(`📂 Checking for local GeoJSON: ${LOCAL_GEOJSON_PATH}`);
+    const fileContent = await fs.readFile(LOCAL_GEOJSON_PATH, 'utf-8');
     const data = JSON.parse(fileContent);
     
     let records: any[] = [];
     
-    // Handle GeoJSON FeatureCollection
     if (data.type === 'FeatureCollection' && Array.isArray(data.features)) {
       records = data.features.map((f: any) => ({
         ...f.properties,
         geometry: f.geometry,
       }));
-    }
-    // Handle direct array
-    else if (Array.isArray(data)) {
+    } else if (Array.isArray(data)) {
       records = data;
     }
-    // Handle data.gov.sg CKAN format
-    else if (data.result && data.result.records) {
-      records = data.result.records;
-    }
     
-    console.log(`✅ Loaded ${records.length} MRT exits from local file`);
-    return { data: records, source: 'file' };
+    console.log(`✅ Loaded ${records.length} MRT exits from local GeoJSON`);
+    return { data: records, source: 'Local GeoJSON' };
   } catch (error: any) {
     if (error.code !== 'ENOENT') {
-      console.error(`❌ Error reading local file:`, error);
+      console.error(`❌ Error reading local GeoJSON:`, error);
     }
   }
 
-  console.log(`⚠️  No local MRT exits file found`);
-
-  // Strategy 2: Try URL
-  if (!MRT_EXITS_URL) {
-    console.warn(`⚠️  MRT_EXITS_URL not configured in .env`);
-    console.log(`\n💡 To fix this, either:`);
-    console.log(`   1. Place file at: ${LOCAL_FILE_PATH}`);
-    console.log(`   2. Or set MRT_EXITS_URL in backend/.env`);
-    return null;
-  }
-
+  // Strategy 3: Try local CSV file
   try {
-    console.log(`🌐 Fetching MRT exits from URL: ${MRT_EXITS_URL}`);
-    const response = await fetch(MRT_EXITS_URL);
+    console.log(`📂 Checking for local CSV: ${LOCAL_CSV_PATH}`);
+    const fileContent = await fs.readFile(LOCAL_CSV_PATH, 'utf-8');
+    const records = parse(fileContent, {
+      columns: true,
+      skip_empty_lines: true,
+      bom: true,
+      trim: true,
+    });
     
-    if (!response.ok) {
-      console.error(`❌ HTTP ${response.status}: ${response.statusText}`);
-      return null;
+    console.log(`✅ Loaded ${records.length} MRT exits from local CSV`);
+    return { data: records, source: 'Local CSV' };
+  } catch (error: any) {
+    if (error.code !== 'ENOENT') {
+      console.error(`❌ Error reading local CSV:`, error);
     }
-
-    const data = await response.json();
-    
-    let records: any[] = [];
-    
-    // Handle data.gov.sg CKAN API format
-    if (data.result && data.result.records) {
-      records = data.result.records;
-    }
-    // Handle GeoJSON
-    else if (data.type === 'FeatureCollection' && data.features) {
-      records = data.features.map((f: any) => ({
-        ...f.properties,
-        geometry: f.geometry,
-      }));
-    }
-    // Handle array
-    else if (Array.isArray(data)) {
-      records = data;
-    }
-    else {
-      console.error('❌ Unexpected data format from URL');
-      return null;
-    }
-
-    console.log(`✅ Fetched ${records.length} MRT exits from URL`);
-    return { data: records, source: 'url' };
-  } catch (error) {
-    console.error('❌ Failed to fetch MRT exits from URL:', error);
-    return null;
   }
+
+  console.error(`❌ No MRT exits data source available`);
+  console.log(`\n💡 To fix this, either:`);
+  console.log(`   1. Set MRT_EXITS_URL in backend/.env`);
+  console.log(`   2. Place file at: ${LOCAL_GEOJSON_PATH}`);
+  console.log(`   3. Place file at: ${LOCAL_CSV_PATH}`);
+  return null;
 }
 
 /**
- * Normalize MRT exit record
+ * Normalize MRT exit record with CRS detection and conversion
  */
-function normalizeMRTExit(raw: any): {
-  stationId: string;
-  name: string;
+function normalizeMRTExit(raw: any, rowIndex: number): {
+  id: string;
+  station: string | null;
   code: string | null;
-  exitCode: string | null;
   coordinates: [number, number] | null;
+  originalCRS: CRS;
+  converted: boolean;
 } | null {
-  // Extract coordinates
+  // Extract coordinates from GeoJSON geometry
   let coordinates: [number, number] | null = null;
+  let originalCRS: CRS = "UNKNOWN";
+  let converted = false;
 
   if (raw.geometry && raw.geometry.type === 'Point') {
     coordinates = [raw.geometry.coordinates[0], raw.geometry.coordinates[1]];
-  } else if (raw.LATITUDE && raw.LONGITUDE) {
-    coordinates = [parseFloat(raw.LONGITUDE), parseFloat(raw.LATITUDE)];
-  } else if (raw.latitude && raw.longitude) {
+  } else if (raw.longitude && raw.latitude) {
     coordinates = [parseFloat(raw.longitude), parseFloat(raw.latitude)];
+  } else if (raw.lng && raw.lat) {
+    coordinates = [parseFloat(raw.lng), parseFloat(raw.lat)];
   }
 
   if (!coordinates || isNaN(coordinates[0]) || isNaN(coordinates[1])) {
     return null;
   }
 
-  // Extract fields
-  const name = String(raw.STN_NAME || raw.stn_name || raw.STATION_NAME || raw.station_name || raw.NAME || raw.name || '').trim();
-  const code = raw.STN_NO || raw.stn_no || raw.STATION_CODE || raw.station_code || raw.CODE || raw.code || null;
-  const exitCode = raw.EXIT_CODE || raw.exit_code || raw.EXIT || raw.exit || null;
-  
-  // Generate unique station ID
-  const stationId = exitCode 
-    ? `${code || name}_EXIT_${exitCode}`.replace(/\s+/g, '_')
-    : `${code || name}_${coordinates[0]}_${coordinates[1]}`.replace(/\s+/g, '_');
-
-  if (!name) {
-    return null;
+  // Detect and convert CRS
+  originalCRS = detectCRS(coordinates[0], coordinates[1]);
+  if (originalCRS === "SVY21") {
+    coordinates = ensureWGS84(coordinates[0], coordinates[1]);
+    converted = true;
   }
 
+  // Extract station and code from Description HTML table or direct properties
+  let station: string | null = null;
+  let code: string | null = null;
+
+  if (raw.Description) {
+    const parsed = parseStationInfo(raw.Description);
+    station = parsed.station || null;
+    code = parsed.code || null;
+  } else {
+    station = raw.STATION_NA || raw.station || raw.name || raw.STATION_NAME || null;
+    code = raw.EXIT_CODE || raw.code || raw.EXIT || raw.exit || null;
+  }
+
+  // If no station/code, try Name field
+  if (!station && raw.Name && raw.Name !== 'kml_1') {
+    station = raw.Name;
+  }
+
+  // Generate stable ID
+  const id = stableMRTExitId(station || undefined, code || undefined, coordinates[0], coordinates[1]);
+
   return {
-    stationId,
-    name,
-    code: code ? String(code) : null,
-    exitCode: exitCode ? String(exitCode) : null,
+    id,
+    station: station || null,
+    code: code || null,
     coordinates,
+    originalCRS,
+    converted,
   };
 }
 
 /**
- * Upsert MRT exit
+ * Upsert MRT exit with point-in-polygon matching
  */
 async function upsertMRTExit(normalized: ReturnType<typeof normalizeMRTExit>): Promise<void> {
   if (!normalized) return;
 
-  const subzoneId = await findSubzoneForPoint(normalized.coordinates!);
+  // Find subzone via point-in-polygon with buffer support
+  const subzoneId = await assignSubzoneWithBuffer(normalized.coordinates![0], normalized.coordinates![1]);
 
-  if (subzoneId) {
-    console.log(`✅ Matched MRT "${normalized.name}" (${normalized.code || 'N/A'}) → ${subzoneId}`);
-  } else {
-    console.log(`⚠️  MRT "${normalized.name}" not in any subzone`);
-  }
-
-  await prisma.mRTStation.upsert({
-    where: { stationId: normalized.stationId },
+  await prisma.mRTExit.upsert({
+    where: { id: normalized.id },
     create: {
-      stationId: normalized.stationId,
-      name: normalized.name,
+      id: normalized.id,
+      station: normalized.station,
       code: normalized.code,
-      exitCode: normalized.exitCode,
       location: createPointGeometry(normalized.coordinates![0], normalized.coordinates![1]),
       subzoneId,
     },
     update: {
-      name: normalized.name,
+      station: normalized.station,
       code: normalized.code,
-      exitCode: normalized.exitCode,
       location: createPointGeometry(normalized.coordinates![0], normalized.coordinates![1]),
       subzoneId,
     },
@@ -190,7 +224,7 @@ async function upsertMRTExit(normalized: ReturnType<typeof normalizeMRTExit>): P
 }
 
 /**
- * Record snapshot
+ * Record snapshot with comprehensive metadata
  */
 async function recordSnapshot(
   status: 'success' | 'partial' | 'failed',
@@ -209,99 +243,145 @@ async function recordSnapshot(
 }
 
 /**
- * Main ingestion function
+ * Main ingestion function with stage-by-stage diagnostics
  */
 export async function ingestMRTExits() {
   const startTime = Date.now();
-  console.log('🚀 Starting MRT station exits ingestion...\n');
+  console.log('🚀 Starting MRT exits ingestion (Part D)...\n');
 
-  let processedCount = 0;
-  let matchedCount = 0;
-  let unmatchedCount = 0;
-  let errorCount = 0;
-  const errors: string[] = [];
+  // Stage counters
+  let totalRead = 0;
+  let invalidGeom = 0;
+  let convertedCRS = 0;
+  let upserted = 0;
+  let assigned = 0;
+  let unassigned = 0;
+  let errors: string[] = [];
+  let crsStats: Record<string, number> = {};
 
   try {
     const result = await fetchMRTExits();
-    
     if (!result) {
-      console.error('\n❌ MRT exits ingestion failed: No data source available');
-      console.log('💡 Please either:');
-      console.log(`   1. Place mrt_station_exits.json in: ${DATA_DIR}`);
-      console.log(`   2. Or set MRT_EXITS_URL in backend/.env\n`);
-      
-      await recordSnapshot('failed', {
-        error: 'NO_DATA_SOURCE',
-        message: 'No local file found and no URL configured',
-      });
-      return;
+      throw new Error('No data source available');
     }
 
-    const { data: records, source } = result;
-    console.log(`📊 Data source: ${source === 'file' ? 'Local file' : 'URL fetch'}`);
-    console.log(`📊 Found ${records.length} MRT exit records\n`);
+    const { data: rawData, source } = result;
+    totalRead = rawData.length;
 
-    for (const record of records) {
+    console.log(`📊 Data source: ${source}`);
+    console.log(`📊 Found ${totalRead} raw records\n`);
+
+    // Stage 1: Normalize and detect CRS
+    console.log('🔄 Stage 1: Normalizing records and detecting CRS...');
+    const normalizedExits: Array<ReturnType<typeof normalizeMRTExit>> = [];
+
+    for (const [rowIndex, rawRow] of rawData.entries()) {
+      const normalized = normalizeMRTExit(rawRow, rowIndex);
+      
+      if (!normalized) {
+        invalidGeom++;
+        errors.push(`Row ${rowIndex + 1}: Invalid geometry or missing coordinates`);
+        continue;
+      }
+
+      // Track CRS statistics
+      crsStats[normalized.originalCRS] = (crsStats[normalized.originalCRS] || 0) + 1;
+      if (normalized.converted) {
+        convertedCRS++;
+      }
+
+      normalizedExits.push(normalized);
+    }
+
+    console.log(`✅ Normalized: ${normalizedExits.length} records`);
+    console.log(`❌ Invalid geometry: ${invalidGeom} records`);
+    console.log(`🔄 CRS converted: ${convertedCRS} records`);
+    console.log(`📊 CRS breakdown:`, crsStats);
+
+    // Stage 2: Point-in-polygon assignment and upsert
+    console.log('\n🔄 Stage 2: Point-in-polygon assignment and database upsert...');
+    
+    for (const normalized of normalizedExits) {
       try {
-        const normalized = normalizeMRTExit(record);
-        
-        if (!normalized) {
-          console.warn(`⚠️  Skipping invalid record`);
-          errorCount++;
-          continue;
-        }
-
         await upsertMRTExit(normalized);
-        processedCount++;
+        upserted++;
 
-        const subzoneId = await findSubzoneForPoint(normalized.coordinates!);
-        if (subzoneId) {
-          matchedCount++;
-        } else {
-          unmatchedCount++;
+        if (normalized.coordinates) {
+          const subzoneId = await assignSubzoneWithBuffer(normalized.coordinates[0], normalized.coordinates[1]);
+          if (subzoneId) {
+            assigned++;
+          } else {
+            unassigned++;
+            console.log(`⚠️  "${normalized.station || normalized.code || 'Unknown'}" not in any subzone`);
+          }
         }
-
       } catch (error) {
-        errorCount++;
-        const errorMsg = error instanceof Error ? error.message : String(error);
-        errors.push(errorMsg);
-        console.error(`❌ Error processing record:`, error);
+        errors.push(`Upsert error for ${normalized.station || normalized.code || 'Unknown'}: ${error}`);
       }
     }
 
-    const duration = Date.now() - startTime;
-    const status = errorCount > 0 ? 'partial' : 'success';
-    
-    await recordSnapshot(status, {
-      source: result.source,
-      totalRecords: records.length,
-      processedCount,
-      matchedCount,
-      unmatchedCount,
-      errorCount,
-      duration: `${duration}ms`,
-      errors: errors.slice(0, 10),
-    }, result.source === 'url' ? MRT_EXITS_URL : undefined);
+    // Calculate final status
+    const assignmentRate = assigned / Math.max(assigned + unassigned, 1);
+    const status = upserted > 0 && assignmentRate >= 0.5 ? "success" : "partial";
 
-    console.log('\n════════════════════════════════════════════════════════════════════════════');
-    console.log('📊 Ingestion Summary');
-    console.log('════════════════════════════════════════════════════════════════════════════');
-    console.log(`   Data source:          ${result.source === 'file' ? 'Local file' : 'URL fetch'}`);
-    console.log(`   Total records:        ${records.length}`);
-    console.log(`   ✅ Processed:          ${processedCount}`);
-    console.log(`   🎯 Matched to subzone: ${matchedCount}`);
-    console.log(`   ⚠️  Unmatched:         ${unmatchedCount}`);
-    console.log(`   ❌ Errors:             ${errorCount}`);
+    // Record snapshot
+    const meta = {
+      source,
+      totalRead,
+      invalidGeom,
+      convertedCRS,
+      upserted,
+      assigned,
+      unassigned,
+      assignmentRate: Math.round(assignmentRate * 100),
+      crsStats,
+      errors: errors.slice(0, 10),
+      errorCount: errors.length,
+    };
+
+    await recordSnapshot(status, meta, MRT_EXITS_URL);
+
+    const duration = Date.now() - startTime;
+
+    // Print comprehensive summary
+    console.log('\n' + '='.repeat(80));
+    console.log('📊 MRT Exits Ingestion Summary (Part D)');
+    console.log('='.repeat(80));
+    console.log(`   Data source:          ${source}`);
+    console.log(`   Total raw records:    ${totalRead}`);
+    console.log(`   ✅ Normalized:         ${normalizedExits.length}`);
+    console.log(`   ❌ Invalid geometry:  ${invalidGeom}`);
+    console.log(`   🔄 CRS converted:     ${convertedCRS}`);
+    console.log(`   📊 CRS breakdown:     ${JSON.stringify(crsStats)}`);
+    console.log(`   💾 Upserted:          ${upserted}`);
+    console.log(`   🎯 Assigned to subzone: ${assigned}`);
+    console.log(`   ⚠️  Unassigned:        ${unassigned}`);
+    console.log(`   📈 Assignment rate:    ${Math.round(assignmentRate * 100)}%`);
+    console.log(`   ❌ Errors:             ${errors.length}`);
     console.log(`   ⏱️  Duration:           ${duration}ms`);
     console.log(`   📝 Status:             ${status}`);
-    console.log('════════════════════════════════════════════════════════════════════════════\n');
+    console.log('='.repeat(80));
+
+    if (errors.length > 0) {
+      console.log('\n❌ First 5 errors:');
+      errors.slice(0, 5).forEach((error, i) => {
+        console.log(`   ${i + 1}. ${error}`);
+      });
+    }
+
+    console.log('\n✅ MRT exits ingestion completed');
 
   } catch (error) {
-    console.error('\n❌ Fatal error during MRT exits ingestion:', error);
+    console.error('❌ Ingestion failed:', error);
     
     await recordSnapshot('failed', {
-      error: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
+      error: String(error),
+      totalRead,
+      invalidGeom,
+      convertedCRS,
+      upserted,
+      assigned,
+      unassigned,
     });
     
     throw error;
@@ -310,16 +390,7 @@ export async function ingestMRTExits() {
   }
 }
 
-// Allow running directly
+// Run if called directly
 if (require.main === module) {
-  ingestMRTExits()
-    .then(() => {
-      console.log('✅ MRT exits ingestion completed');
-      process.exit(0);
-    })
-    .catch((error) => {
-      console.error('❌ MRT exits ingestion failed:', error);
-      process.exit(1);
-    });
+  ingestMRTExits().catch(console.error);
 }
-
