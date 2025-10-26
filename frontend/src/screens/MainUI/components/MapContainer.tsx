@@ -24,6 +24,7 @@ interface MapContainerProps {
   onFeatureClick: (id: string) => void;
   onFeatureHover: (id: string | null) => void;
   zoomToFeature?: Feature | null; // Task I: External zoom trigger
+  breaks?: number[]; // API-provided breaks for color scale
 }
 
 /**
@@ -103,6 +104,7 @@ export function MapContainer({
   onFeatureClick,
   onFeatureHover,
   zoomToFeature,
+  breaks: apiBreaks = [], // Use API breaks if provided
 }: MapContainerProps) {
   const mapRef = useRef<MapInstance | null>(null);
   const tooltipRef = useRef<HTMLDivElement | null>(null);
@@ -189,8 +191,8 @@ export function MapContainer({
 
     function initializeLayers() {
       try {
-        // Compute quantiles for color scale
-        const breaks = computeQuantiles(geojson.features);
+        // Use API breaks if provided, otherwise compute locally
+        const breaks = apiBreaks.length > 0 ? apiBreaks : computeQuantiles(geojson.features);
         const fillColorExpression = generateFillColorExpression(breaks);
 
         if (process.env.NODE_ENV === 'development') {
@@ -298,7 +300,7 @@ export function MapContainer({
         setDebugInfo(d => ({ ...d, lastError: String(error) }));
       }
     }
-  }, [mapReady, geojson]);
+  }, [mapReady, geojson, apiBreaks]);
 
   // Update selection filter
   useEffect(() => {

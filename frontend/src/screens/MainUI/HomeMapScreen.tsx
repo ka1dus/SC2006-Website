@@ -413,6 +413,7 @@ export function HomeMapScreen() {
                   onFeatureClick={selection.toggle}
                   onFeatureHover={hover.onEnter}
                   zoomToFeature={zoomToFeature}
+                  breaks={quantiles?.breaks}
                 />
 
                 {/* Task I: Subzone Search */}
