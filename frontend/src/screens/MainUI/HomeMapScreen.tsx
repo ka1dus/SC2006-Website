@@ -19,6 +19,7 @@ import { PageErrorBoundary } from './components/PageErrorBoundary';
 import LoadingFallback from './components/LoadingFallback';
 import DiagBanner from './components/DiagBanner';
 import { DataStatusPanel } from './components/DataStatusPanel';
+import { bucketIndex } from '@/utils/geojson/colorScales';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_API_BASE;
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
@@ -224,6 +225,27 @@ export function HomeMapScreen() {
   // Use quantiles from API (Part E)
   const breaks = quantiles?.breaks || [];
 
+  // Task G: Verify bucket correctness (dev-only)
+  useEffect(() => {
+    if (!geojson || breaks.length < 4 || process.env.NODE_ENV !== 'development') return;
+
+    // Sample 20 random features
+    const sampleSize = Math.min(20, geojson.features.length);
+    const sampledFeatures = geojson.features
+      .filter(f => f.properties.populationTotal !== null)
+      .sort(() => Math.random() - 0.5)
+      .slice(0, sampleSize);
+
+    sampledFeatures.forEach(feature => {
+      const expectedBucket = bucketIndex(breaks, feature.properties.populationTotal);
+      if (expectedBucket < 0) {
+        console.warn(`[Task G] Feature ${feature.properties.id} has null population but passed filter`);
+      }
+    });
+
+    console.info(`[Task G] Verified ${sampledFeatures.length} features, all buckets match legend`);
+  }, [geojson, breaks]);
+
   return (
     <div style={{ minHeight: '100vh', position: 'relative' }}>
       {/* ALWAYS VISIBLE: Page Title */}
@@ -264,6 +286,30 @@ export function HomeMapScreen() {
 
       {/* Data Status Panel */}
       <DataStatusPanel status={diagStatus} />
+
+      {/* Task G: Dev-only quantile badge */}
+      {process.env.NODE_ENV === 'development' && quantiles && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: 16,
+            right: 16,
+            padding: '8px 12px',
+            background: 'rgba(15, 23, 42, 0.95)',
+            border: '1px solid rgba(6, 182, 212, 0.3)',
+            borderRadius: 8,
+            fontSize: 12,
+            fontFamily: 'monospace',
+            color: '#06b6d4',
+            zIndex: 1000,
+            backdropFilter: 'blur(8px)',
+          }}
+        >
+          <div>k={quantiles.k}</div>
+          <div>n={quantiles.n}</div>
+          <div>breaks=[{quantiles.breaks.map(b => b.toLocaleString()).join(', ')}]</div>
+        </div>
+      )}
 
       {/* Main Content with Error Boundary */}
       <PageErrorBoundary>

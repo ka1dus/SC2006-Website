@@ -94,6 +94,25 @@ export function formatPopulation(value: number | null): string {
 }
 
 /**
+ * Calculate which bucket index a population value belongs to (Task G)
+ * @param breaks Array of 4 thresholds [b0, b1, b2, b3] for 5 buckets
+ * @param v Population value (or null for no data)
+ * @returns Bucket index 0-4, or -1 for no data
+ */
+export function bucketIndex(breaks: number[], v: number | null): number {
+  if (v === null) return -1; // No data
+  if (breaks.length < 4) return 0; // Fallback if breaks not ready
+  
+  const [b0, b1, b2, b3] = breaks;
+  
+  if (v < b0) return 0;      // Bucket 1: < b0
+  if (v < b1) return 1;     // Bucket 2: b0 <= v < b1
+  if (v < b2) return 2;     // Bucket 3: b1 <= v < b2
+  if (v < b3) return 3;     // Bucket 4: b2 <= v < b3
+  return 4;                  // Bucket 5: >= b3
+}
+
+/**
  * Get legend items for display (Part E: uses API breaks)
  */
 export function getLegendItems(breaks: number[]): Array<{ color: string; label: string }> {
